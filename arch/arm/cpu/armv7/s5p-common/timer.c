@@ -4,26 +4,11 @@
  * Inki Dae <inki.dae@samsung.com>
  * Minkyu Kang <mk7.kang@samsung.com>
  *
- * See file CREDITS for list of people who contributed to this
- * project.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <div64.h>
 #include <asm/io.h>
 #include <asm/arch/pwm.h>
 #include <asm/arch/clk.h>
@@ -76,6 +61,8 @@ int timer_init(void)
  */
 unsigned long get_timer(unsigned long base)
 {
+	unsigned long long time_ms;
+
 	ulong now = timer_get_us_down();
 
 	/*
@@ -87,10 +74,12 @@ unsigned long get_timer(unsigned long base)
 	gd->arch.lastinc = now;
 
 	/* Divide by 1000 to convert from us to ms */
-	return gd->arch.timer_reset_value / 1000 - base;
+	time_ms = gd->arch.timer_reset_value;
+	do_div(time_ms, 1000);
+	return time_ms - base;
 }
 
-unsigned long timer_get_us(void)
+unsigned long __attribute__((no_instrument_function)) timer_get_us(void)
 {
 	static unsigned long base_time_us;
 

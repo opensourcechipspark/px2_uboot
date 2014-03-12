@@ -49,33 +49,68 @@ int get_num_cpus(void)
  * Timing tables for each SOC for all four oscillator options.
  */
 struct clk_pll_table tegra_pll_x_table[TEGRA_SOC_CNT][CLOCK_OSC_FREQ_COUNT] = {
-	/* T20: 1 GHz */
-	/*  n,  m, p, cpcon */
-	{{ 1000, 13, 0, 12},	/* OSC 13M */
-	 { 625,  12, 0, 8},	/* OSC 19.2M */
-	 { 1000, 12, 0, 12},	/* OSC 12M */
-	 { 1000, 26, 0, 12},	/* OSC 26M */
+	/*
+	 * T20: 1 GHz
+	 *
+	 * Register   Field  Bits   Width
+	 * ------------------------------
+	 * PLLX_BASE  p      22:20    3
+	 * PLLX_BASE  n      17: 8   10
+	 * PLLX_BASE  m       4: 0    5
+	 * PLLX_MISC  cpcon  11: 8    4
+	 */
+	{
+		{ .n = 1000, .m = 13, .p = 0, .cpcon = 12 }, /* OSC: 13.0 MHz */
+		{ .n =  625, .m = 12, .p = 0, .cpcon =  8 }, /* OSC: 19.2 MHz */
+		{ .n = 1000, .m = 12, .p = 0, .cpcon = 12 }, /* OSC: 12.0 MHz */
+		{ .n = 1000, .m = 26, .p = 0, .cpcon = 12 }, /* OSC: 26.0 MHz */
 	},
-
-	/* T25: 1.2 GHz */
-	{{ 923, 10, 0, 12},
-	 { 750, 12, 0, 8},
-	 { 600,  6, 0, 12},
-	 { 600, 13, 0, 12},
+	/*
+	 * T25: 1.2 GHz
+	 *
+	 * Register   Field  Bits   Width
+	 * ------------------------------
+	 * PLLX_BASE  p      22:20    3
+	 * PLLX_BASE  n      17: 8   10
+	 * PLLX_BASE  m       4: 0    5
+	 * PLLX_MISC  cpcon  11: 8    4
+	 */
+	{
+		{ .n = 923, .m = 10, .p = 0, .cpcon = 12 }, /* OSC: 13.0 MHz */
+		{ .n = 750, .m = 12, .p = 0, .cpcon =  8 }, /* OSC: 19.2 MHz */
+		{ .n = 600, .m =  6, .p = 0, .cpcon = 12 }, /* OSC: 12.0 MHz */
+		{ .n = 600, .m = 13, .p = 0, .cpcon = 12 }, /* OSC: 26.0 MHz */
 	},
-
-	/* T30: 1.4 GHz */
-	{{ 862, 8, 0, 8},
-	 { 583, 8, 0, 4},
-	 { 700, 6, 0, 8},
-	 { 700, 13, 0, 8},
+	/*
+	 * T30: 1.4 GHz
+	 *
+	 * Register   Field  Bits   Width
+	 * ------------------------------
+	 * PLLX_BASE  p      22:20    3
+	 * PLLX_BASE  n      17: 8   10
+	 * PLLX_BASE  m       4: 0    5
+	 * PLLX_MISC  cpcon  11: 8    4
+	 */
+	{
+		{ .n = 862, .m =  8, .p = 0, .cpcon = 8 }, /* OSC: 13.0 MHz */
+		{ .n = 583, .m =  8, .p = 0, .cpcon = 4 }, /* OSC: 19.2 MHz */
+		{ .n = 700, .m =  6, .p = 0, .cpcon = 8 }, /* OSC: 12.0 MHz */
+		{ .n = 700, .m = 13, .p = 0, .cpcon = 8 }, /* OSC: 26.0 MHz */
 	},
-
-	/* T114: 1.4 GHz */
-	{{ 862, 8, 0, 8},
-	 { 583, 8, 0, 4},
-	 { 696, 12, 0, 8},
-	 { 700, 13, 0, 8},
+	/*
+	 * T114: 700 MHz
+	 *
+	 * Register   Field  Bits   Width
+	 * ------------------------------
+	 * PLLX_BASE  p      23:20    4
+	 * PLLX_BASE  n      15: 8    8
+	 * PLLX_BASE  m       7: 0    8
+	 */
+	{
+		{ .n = 108, .m = 1, .p = 1 }, /* OSC: 13.0 MHz */
+		{ .n =  73, .m = 1, .p = 1 }, /* OSC: 19.2 MHz */
+		{ .n = 116, .m = 1, .p = 1 }, /* OSC: 12.0 MHz */
+		{ .n = 108, .m = 2, .p = 1 }, /* OSC: 26.0 MHz */
 	},
 };
 
@@ -100,6 +135,7 @@ void adjust_pllp_out_freqs(void)
 int pllx_set_rate(struct clk_pll_simple *pll , u32 divn, u32 divm,
 		u32 divp, u32 cpcon)
 {
+	int chip = tegra_get_chip();
 	u32 reg;
 
 	/* If PLLX is already enabled, just return */
@@ -116,7 +152,10 @@ int pllx_set_rate(struct clk_pll_simple *pll , u32 divn, u32 divm,
 	writel(reg, &pll->pll_base);
 
 	/* Set cpcon to PLLX_MISC */
-	reg = (cpcon << PLL_CPCON_SHIFT);
+	if (chip == CHIPID_TEGRA20 || chip == CHIPID_TEGRA30)
+		reg = (cpcon << PLL_CPCON_SHIFT);
+	else
+		reg = 0;
 
 	/* Set dccon to PLLX_MISC if freq > 600MHz */
 	if (divn > 600)
@@ -143,26 +182,34 @@ void init_pllx(void)
 {
 	struct clk_rst_ctlr *clkrst = (struct clk_rst_ctlr *)NV_PA_CLK_RST_BASE;
 	struct clk_pll_simple *pll = &clkrst->crc_pll_simple[SIMPLE_PLLX];
-	int chip_type;
+	int soc_type, sku_info, chip_sku;
 	enum clock_osc_freq osc;
 	struct clk_pll_table *sel;
 
 	debug("init_pllx entry\n");
 
-	/* get chip type */
-	chip_type = tegra_get_chip_type();
-	debug(" init_pllx: chip_type = %d\n", chip_type);
+	/* get SOC (chip) type */
+	soc_type = tegra_get_chip();
+	debug(" init_pllx: SoC = 0x%02X\n", soc_type);
+
+	/* get SKU info */
+	sku_info = tegra_get_sku_info();
+	debug(" init_pllx: SKU info byte = 0x%02X\n", sku_info);
+
+	/* get chip SKU, combo of the above info */
+	chip_sku = tegra_get_chip_sku();
+	debug(" init_pllx: Chip SKU = %d\n", chip_sku);
 
 	/* get osc freq */
 	osc = clock_get_osc_freq();
-	debug("  init_pllx: osc = %d\n", osc);
+	debug(" init_pllx: osc = %d\n", osc);
 
 	/* set pllx */
-	sel = &tegra_pll_x_table[chip_type][osc];
+	sel = &tegra_pll_x_table[chip_sku][osc];
 	pllx_set_rate(pll, sel->n, sel->m, sel->p, sel->cpcon);
 
-	/* adjust PLLP_out1-4 on T30/T114 */
-	if (chip_type == TEGRA_SOC_T30 || chip_type == TEGRA_SOC_T114) {
+	/* adjust PLLP_out1-4 on T3x/T114 */
+	if (soc_type >= CHIPID_TEGRA30) {
 		debug("  init_pllx: adjusting PLLP out freqs\n");
 		adjust_pllp_out_freqs();
 	}
@@ -287,7 +334,7 @@ void reset_A9_cpu(int reset)
 void clock_enable_coresight(int enable)
 {
 	u32 rst, src = 2;
-	int chip;
+	int soc_type;
 
 	debug("clock_enable_coresight entry\n");
 	clock_set_enable(PERIPH_ID_CORESIGHT, enable);
@@ -295,21 +342,21 @@ void clock_enable_coresight(int enable)
 
 	if (enable) {
 		/*
-		 * Put CoreSight on PLLP_OUT0 (216 MHz) and divide it down by
-		 *  1.5, giving an effective frequency of 144MHz.
-		 * Set PLLP_OUT0 [bits31:30 = 00], and use a 7.1 divisor
-		 *  (bits 7:0), so 00000001b == 1.5 (n+1 + .5)
-		 *
-		 * Clock divider request for 204MHz would setup CSITE clock as
-		 * 144MHz for PLLP base 216MHz and 204MHz for PLLP base 408MHz
+		 * Put CoreSight on PLLP_OUT0 and divide it down as per
+		 * PLLP base frequency based on SoC type (T20/T30/T114).
+		 * Clock divider request would setup CSITE clock as 144MHz
+		 * for PLLP base 216MHz and 204MHz for PLLP base 408MHz
 		 */
-		chip = tegra_get_chip_type();
-		if (chip == TEGRA_SOC_T30 || chip == TEGRA_SOC_T114)
+
+		soc_type = tegra_get_chip();
+		if (soc_type == CHIPID_TEGRA30 || soc_type == CHIPID_TEGRA114)
 			src = CLK_DIVIDER(NVBL_PLLP_KHZ, 204000);
-		else if (chip == TEGRA_SOC_T20 || chip == TEGRA_SOC_T25)
+		else if (soc_type == CHIPID_TEGRA20)
 			src = CLK_DIVIDER(NVBL_PLLP_KHZ, 144000);
 		else
-			printf("%s: Unknown chip type %X!\n", __func__, chip);
+			printf("%s: Unknown SoC type %X!\n",
+				 __func__, soc_type);
+
 		clock_ll_set_source_divisor(PERIPH_ID_CSI, 0, src);
 
 		/* Unlock the CPU CoreSight interfaces */

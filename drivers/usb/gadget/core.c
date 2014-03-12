@@ -13,20 +13,7 @@
  *	Tom Rushworth <tbr@lineo.com>,
  *	Bruce Balden <balden@lineo.com>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <malloc.h>
@@ -364,7 +351,10 @@ void usbd_rcv_complete(struct usb_endpoint_instance *endpoint, int len, int urb_
 			/*rcv_urb->actual_length, rcv_urb->buffer_length); */
 
 			/* check the urb is ok, are we adding data less than the packetsize */
-			if (!urb_bad && (len <= endpoint->rcv_packetSize)) {
+
+            //mod for large urb transfer.
+			//if (!urb_bad && (len <= endpoint->rcv_packetSize)) {
+			if (!urb_bad /*&& (len <= endpoint->rcv_packetSize)*/) {
 			  /*usbdbg("updating actual_length by %d\n",len); */
 
 				/* increment the received data size */
@@ -670,7 +660,7 @@ void usbd_device_event_irq (struct usb_device_instance *device, usb_device_event
 		usbdbg("event %d - not handled",event);
 		break;
 	}
-	debug("%s event: %d oldstate: %d newstate: %d status: %d address: %d",
+	debug("%s event: %d oldstate: %d newstate: %d status: %d address: %d \n",
 		device->name, event, state,
 		device->device_state, device->status, device->address);
 

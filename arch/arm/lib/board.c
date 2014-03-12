@@ -6,23 +6,7 @@
  * Sysgo Real-Time Solutions, GmbH <www.elinos.com>
  * Marius Groeger <mgroeger@sysgo.de>
  *
- * See file CREDITS for list of people who contributed to this
- * project.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 /*
@@ -37,6 +21,7 @@
  * IRQ Stack: 00ebff7c
  * FIQ Stack: 00ebef7c
  */
+#define DEBUG
 
 #include <common.h>
 #include <command.h>
@@ -54,6 +39,7 @@
 #include <post.h>
 #include <logbuff.h>
 #include <asm/sections.h>
+#include <asm/sizes.h>
 
 #ifdef CONFIG_BITBANGMII
 #include <miiphy.h>
@@ -69,10 +55,11 @@ extern void dataflash_print_info(void);
 #endif
 
 #if defined(CONFIG_HARD_I2C) || \
-    defined(CONFIG_SOFT_I2C)
+	defined(CONFIG_SYS_I2C)
 #include <i2c.h>
 #endif
 
+extern void DMADeInit(void);
 /************************************************************************
  * Coloured LED functionality
  ************************************************************************
@@ -165,11 +152,15 @@ static int display_dram_config(void)
 	return (0);
 }
 
-#if defined(CONFIG_HARD_I2C) || defined(CONFIG_SOFT_I2C)
+#if defined(CONFIG_HARD_I2C) || defined(CONFIG_SYS_I2C)
 static int init_func_i2c(void)
 {
 	puts("I2C:   ");
+#ifdef CONFIG_SYS_I2C
+	i2c_init_all();
+#else
 	i2c_init(CONFIG_SYS_I2C_SPEED, CONFIG_SYS_I2C_SLAVE);
+#endif
 	puts("ready\n");
 	return (0);
 }
@@ -268,7 +259,7 @@ init_fnc_t *init_sequence[] = {
 #if defined(CONFIG_DISPLAY_BOARDINFO)
 	checkboard,		/* display board info */
 #endif
-#if defined(CONFIG_HARD_I2C) || defined(CONFIG_SOFT_I2C)
+#if defined(CONFIG_HARD_I2C) || defined(CONFIG_SYS_I2C)
 	init_func_i2c,
 #endif
 	dram_init,		/* configure available RAM banks */
@@ -356,7 +347,7 @@ void board_init_f(ulong bootflag)
 
 #if !(defined(CONFIG_SYS_ICACHE_OFF) && defined(CONFIG_SYS_DCACHE_OFF))
 	/* reserve TLB table */
-	gd->arch.tlb_size = 4096 * 4;
+	gd->arch.tlb_size = PGTABLE_SIZE;
 	addr -= gd->arch.tlb_size;
 
 	/* round down to next 64 kB limit */
@@ -375,10 +366,41 @@ void board_init_f(ulong bootflag)
 	gd->fb_base = CONFIG_FB_ADDR;
 #else
 	/* reserve memory for LCD display (always full pages) */
-	addr = lcd_setmem(addr);
-	gd->fb_base = addr;
+	gd->fb_base = lcd_setmem(addr);
+	debug("Reserving %ldk for fb buffers at %08lx\n", (addr - gd->fb_base) >> 10, gd->fb_base);
+	addr = gd->fb_base;
 #endif /* CONFIG_FB_ADDR */
 #endif /* CONFIG_LCD */
+
+#ifdef CONFIG_ROCKCHIP
+#ifndef CONFIG_RK_EXTRA_BUFFER_SIZE
+#define CONFIG_RK_EXTRA_BUFFER_SIZE (SZ_4M)
+#endif
+    /* reserve rk global buffers */
+    addr -= CONFIG_RK_EXTRA_BUFFER_SIZE;
+
+    gd->arch.rk_extra_buf_addr = addr;
+	debug("Reserving %ldk for rk global buffers at %08lx\n", CONFIG_RK_EXTRA_BUFFER_SIZE >> 10, addr);
+#endif
+
+#ifdef CONFIG_CMD_FASTBOOT
+#ifndef CONFIG_FASTBOOT_TRANSFER_BUFFER_SIZE
+#define CONFIG_FASTBOOT_TRANSFER_BUFFER_SIZE (SZ_32M)
+#endif
+    /* reserve fastboot transfer buffer(also use in fastboot charge animation. */
+    addr -= CONFIG_FASTBOOT_TRANSFER_BUFFER_SIZE;
+
+    gd->arch.fastboot_buf_addr = addr;
+	debug("Reserving %ldk for fastboot transfer buffer at %08lx\n", CONFIG_FASTBOOT_TRANSFER_BUFFER_SIZE >> 10, addr);
+
+#ifndef CONFIG_FASTBOOT_LOG_SIZE
+#define CONFIG_FASTBOOT_LOG_SIZE (SZ_2M)
+#endif
+    /* reserve fastboot log buffer */
+    addr -= CONFIG_FASTBOOT_LOG_SIZE;
+    gd->arch.fastboot_log_buf_addr = addr;
+    debug("Reserving %ldk for fastboot log buffer at %08lx\n", CONFIG_FASTBOOT_LOG_SIZE >> 10, addr);
+#endif //CONFIG_CMD_FASTBOOT
 
 	/*
 	 * reserve memory for U-Boot code, data & bss
@@ -431,6 +453,7 @@ void board_init_f(ulong bootflag)
 	}
 #endif
 
+#ifndef CONFIG_ARM64
 	/* setup stackpointer for exeptions */
 	gd->irq_sp = addr_sp;
 #ifdef CONFIG_USE_IRQ
@@ -443,12 +466,17 @@ void board_init_f(ulong bootflag)
 
 	/* 8-byte alignment for ABI compliance */
 	addr_sp &= ~0x07;
+#else	/* CONFIG_ARM64 */
+	/* 16-byte alignment for ABI compliance */
+	addr_sp &= ~0x0f;
+#endif	/* CONFIG_ARM64 */
 #else
 	addr_sp += 128;	/* leave 32 words for abort-stack   */
 	gd->irq_sp = addr_sp;
 #endif
 
 	debug("New Stack Pointer is: %08lx\n", addr_sp);
+    printf("total reserving memory(except stack) is :%dm\n", ((CONFIG_SYS_SDRAM_BASE + gd->ram_size - addr_sp) >> 20) + 1);
 
 #ifdef CONFIG_POST
 	post_bootmode_init();
@@ -594,7 +622,6 @@ void board_init_r(gd_t *id, ulong dest_addr)
 	puts("NAND:  ");
 	nand_init();		/* go init the NAND */
 #endif
-
 #if defined(CONFIG_CMD_ONENAND)
 	onenand_init();
 #endif
@@ -608,7 +635,13 @@ void board_init_r(gd_t *id, ulong dest_addr)
 	AT91F_DataflashInit();
 	dataflash_print_info();
 #endif
-
+	/* set up exceptions */
+	interrupt_init();
+	/* enable exceptions */
+	enable_interrupts();
+#ifdef CONFIG_PL330_DMA
+	DMAInit();
+#endif
 	/* initialize environment */
 	if (should_load_env())
 		env_relocate();
@@ -648,13 +681,11 @@ void board_init_r(gd_t *id, ulong dest_addr)
 	misc_init_r();
 #endif
 
-	 /* set up exceptions */
-	interrupt_init();
-	/* enable exceptions */
-	enable_interrupts();
-
+	
+#ifndef CONFIG_ROCKCHIP
 	/* Initialize from environment */
 	load_addr = getenv_ulong("loadaddr", 16, load_addr);
+#endif
 
 #ifdef CONFIG_BOARD_LATE_INIT
 	board_late_init();
@@ -705,10 +736,4 @@ void board_init_r(gd_t *id, ulong dest_addr)
 	}
 
 	/* NOTREACHED - no way out of command loop except booting */
-}
-
-void hang(void)
-{
-	puts("### ERROR ### Please RESET the board ###\n");
-	for (;;);
 }

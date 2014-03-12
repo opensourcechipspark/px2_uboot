@@ -12,20 +12,7 @@
  *	Tom Rushworth <tbr@lineo.com>,
  *	Bruce Balden <balden@lineo.com>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __USBDCORE_H__
@@ -487,9 +474,9 @@ struct urb {
 
 	struct urb_link link;	/* embedded struct for circular doubly linked list of urbs */
 
-	u8* buffer;
-	unsigned int buffer_length;
-	unsigned int actual_length;
+	volatile u8* buffer;
+	volatile unsigned int buffer_length;
+	volatile unsigned int actual_length;
 
 	urb_send_status_t status;
 	int data;
@@ -676,8 +663,8 @@ struct usb_device_descriptor *usbd_device_device_descriptor(struct
 #if defined(CONFIG_USBD_HS)
 /*
  * is_usbd_high_speed routine needs to be defined by specific gadget driver
- * It returns TRUE if device enumerates at High speed
- * Retuns FALSE otherwise
+ * It returns true if device enumerates at High speed
+ * Retuns false otherwise
  */
 int is_usbd_high_speed(void);
 #endif

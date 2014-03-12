@@ -2,28 +2,13 @@
  * (C) Copyright 2000
  * Paolo Scaffardi, AIRVENT SAM s.p.a - RIMINI(ITALY), arsenio@tin.it
  *
- * See file CREDITS for list of people who contributed to this
- * project.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
 #include <stdarg.h>
 #include <malloc.h>
+#include <os.h>
 #include <serial.h>
 #include <stdio_dev.h>
 #include <exports.h>
@@ -31,6 +16,7 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
+#ifndef CONFIG_ROCKCHIP
 static int on_console(const char *name, const char *value, enum env_op op,
 	int flags)
 {
@@ -72,6 +58,7 @@ static int on_console(const char *name, const char *value, enum env_op op,
 	}
 }
 U_BOOT_ENV_CALLBACK(console, on_console);
+#endif //CONFIG_ROCKCHIP
 
 #ifdef CONFIG_SILENT_CONSOLE
 static int on_silent(const char *name, const char *value, enum env_op op,
@@ -255,6 +242,7 @@ static inline void console_puts(int file, const char *s)
 	stdio_devices[file]->puts(s);
 }
 
+#ifdef CONFIG_ROCKCHIP
 static inline void console_printdevs(int file)
 {
 	printf("%s\n", stdio_devices[file]->name);
@@ -264,6 +252,7 @@ static inline void console_doenv(int file, struct stdio_dev *dev)
 {
 	console_setfile(file, dev);
 }
+#endif
 #endif /* defined(CONFIG_CONSOLE_MUX) */
 
 /** U-Boot INITIAL CONSOLE-NOT COMPATIBLE FUNCTIONS *************************/
@@ -431,6 +420,12 @@ static inline void print_pre_console_buffer(void) {}
 
 void putc(const char c)
 {
+#ifdef CONFIG_SANDBOX
+	if (!gd) {
+		os_putc(c);
+		return;
+	}
+#endif
 #ifdef CONFIG_SILENT_CONSOLE
 	if (gd->flags & GD_FLG_SILENT)
 		return;
@@ -455,6 +450,13 @@ void putc(const char c)
 
 void puts(const char *s)
 {
+#ifdef CONFIG_SANDBOX
+	if (!gd) {
+		os_puts(s);
+		return;
+	}
+#endif
+
 #ifdef CONFIG_SILENT_CONSOLE
 	if (gd->flags & GD_FLG_SILENT)
 		return;
@@ -483,7 +485,7 @@ int printf(const char *fmt, ...)
 	uint i;
 	char printbuffer[CONFIG_SYS_PBSIZE];
 
-#ifndef CONFIG_PRE_CONSOLE_BUFFER
+#if !defined(CONFIG_SANDBOX) && !defined(CONFIG_PRE_CONSOLE_BUFFER)
 	if (!gd->have_console)
 		return 0;
 #endif
@@ -521,6 +523,7 @@ int vprintf(const char *fmt, va_list args)
 	return i;
 }
 
+#ifdef CONFIG_CTRLC
 /* test if ctrl-c was pressed */
 static int ctrlc_disabled = 0;	/* see disable_ctrl() */
 static int ctrlc_was_pressed = 0;
@@ -560,6 +563,7 @@ void clear_ctrlc(void)
 {
 	ctrlc_was_pressed = 0;
 }
+#endif
 
 #ifdef CONFIG_MODEM_SUPPORT_DEBUG
 char	screen[1024];

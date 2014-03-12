@@ -2,23 +2,7 @@
  *  Copyright (C) 2011-2012 Samsung Electronics
  *  Lukasz Majewski <l.majewski@samsung.com>
  *
- * See file CREDITS for list of people who contributed to this
- * project.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __CORE_PMIC_H_
@@ -90,6 +74,11 @@ struct pmic {
 	struct list_head list;
 };
 
+struct  pmic_voltage{
+        char            *name;
+        int             vol;
+};
+
 int pmic_init(unsigned char bus);
 int pmic_dialog_init(unsigned char bus);
 int check_reg(struct pmic *p, u32 reg);
@@ -99,11 +88,20 @@ int pmic_probe(struct pmic *p);
 int pmic_reg_read(struct pmic *p, u32 reg, u32 *val);
 int pmic_reg_write(struct pmic *p, u32 reg, u32 val);
 int pmic_set_output(struct pmic *p, u32 reg, int ldo, int on);
+int pmic_get_vol(char *name);
+
 
 #define pmic_i2c_addr (p->hw.i2c.addr)
 #define pmic_i2c_tx_num (p->hw.i2c.tx_num)
 
 #define pmic_spi_bitlen (p->hw.spi.bitlen)
 #define pmic_spi_flags (p->hw.spi.flags)
+
+#ifdef CONFIG_POWER_RICOH619
+int check_charge(void);
+int pmic_charger_setting(int current);
+void shut_down(void);
+#endif
+
 
 #endif /* __CORE_PMIC_H_ */

@@ -46,6 +46,8 @@
 #define CONFIG_CMD_ECHO
 #define CONFIG_CMD_CACHE
 
+#define CONFIG_SYS_GENERIC_BOARD
+
 #define CONFIG_ENV_VARS_UBOOT_CONFIG
 #ifndef CONFIG_SPL_BUILD
 #define CONFIG_ROOTPATH		"/opt/eldk"
@@ -137,7 +139,6 @@
 #define CONFIG_SYS_I2C_OMAP24XX
 
 /* Defines for SPL */
-#define CONFIG_SPL
 #define CONFIG_SPL_FRAMEWORK
 #define CONFIG_SPL_TEXT_BASE		0x402F0400
 #define CONFIG_SPL_MAX_SIZE		(101 * 1024)
@@ -166,8 +167,6 @@
 #define CONFIG_SPL_SPI_SUPPORT
 #define CONFIG_SPL_SPI_FLASH_SUPPORT
 #define CONFIG_SPL_SPI_LOAD
-#define CONFIG_SPL_SPI_BUS		0
-#define CONFIG_SPL_SPI_CS		0
 #define CONFIG_SYS_SPI_U_BOOT_OFFS	0x20000
 
 #define CONFIG_SPL_LDSCRIPT		"$(CPUDIR)/am33xx/u-boot-spl.lds"
@@ -232,7 +231,7 @@
 #define CONFIG_MUSB_GADGET
 #define CONFIG_MUSB_PIO_ONLY
 #define CONFIG_MUSB_DISABLE_BULK_COMBINE_SPLIT
-#define CONFIG_USB_GADGET_DUALSPEED
+#undef CONFIG_USB_GADGET_DUALSPEED
 #define CONFIG_USB_GADGET_VBUS_DRAW	2
 #define CONFIG_MUSB_HOST
 
@@ -265,6 +264,7 @@
 #define CONFIG_DFU_NAND
 #define CONFIG_CMD_DFU
 #define CONFIG_SYS_DFU_DATA_BUF_SIZE	(1 << 20)
+#define DFU_MANIFEST_POLL_TIMEOUT	25000
 
 #endif /* CONFIG_SPL_BUILD */
 
@@ -357,7 +357,7 @@
 
 #define CONFIG_COMMON_ENV_SETTINGS \
 	"verify=no \0" \
-	"project_dir=systemone\0" \
+	"project_dir=targetdir\0" \
 	"upgrade_available=0\0" \
 	"altbootcmd=run bootcmd\0" \
 	"bootlimit=3\0" \
@@ -401,7 +401,11 @@
 	"dfu_args=run bootargs_defaults;" \
 		"setenv bootargs ${bootargs} ;" \
 		"mtdparts default; " \
-		"dfu 0 nand 0; \0" \
+		"led dfu 1;" \
+		"led stat 0;" \
+		"dfu 0 nand 0;" \
+		"led dfu 0;" \
+		"led stat 1;\0" \
 		"dfu_alt_info=" DFU_ALT_INFO_NAND "\0" \
 	"net_args=run bootargs_defaults;" \
 		"mtdparts default;" \
@@ -457,7 +461,6 @@
 
 #define CONFIG_NAND_OMAP_GPMC
 #define CONFIG_NAND_OMAP_ELM
-#define GPMC_NAND_ECC_LP_x16_LAYOUT	1
 #define CONFIG_SYS_NAND_BASE		(0x08000000)	/* physical address */
 							/* to access nand at */
 							/* CS0 */

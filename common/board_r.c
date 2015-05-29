@@ -18,6 +18,7 @@
 #ifdef CONFIG_HAS_DATAFLASH
 #include <dataflash.h>
 #endif
+#include <dm.h>
 #include <environment.h>
 #include <fdtdec.h>
 #if defined(CONFIG_CMD_IDE)
@@ -51,13 +52,15 @@
 #ifdef CONFIG_X86
 #include <asm/init_helpers.h>
 #endif
+#include <dm/root.h>
 #include <linux/compiler.h>
+#include <linux/err.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
 ulong monitor_flash_len;
 
-int __board_flash_wp_on(void)
+__weak int board_flash_wp_on(void)
 {
 	/*
 	 * Most flashes can't be detected when write protection is enabled,
@@ -67,15 +70,9 @@ int __board_flash_wp_on(void)
 	return 0;
 }
 
-int board_flash_wp_on(void)
-	__attribute__ ((weak, alias("__board_flash_wp_on")));
-
-void __cpu_secondary_init_r(void)
+__weak void cpu_secondary_init_r(void)
 {
 }
-
-void cpu_secondary_init_r(void)
-	__attribute__ ((weak, alias("__cpu_secondary_init_r")));
 
 static int initr_secondary_cpu(void)
 {
@@ -128,9 +125,9 @@ __weak int fixup_cpu(void)
 
 static int initr_reloc_global_data(void)
 {
-#ifdef CONFIG_SYS_SYM_OFFSETS
-	monitor_flash_len = _end_ofs;
-#elif !defined(CONFIG_SANDBOX)
+#ifdef __ARM__
+	monitor_flash_len = _end - __image_copy_start;
+#elif !defined(CONFIG_SANDBOX) && !defined(CONFIG_NIOS2)
 	monitor_flash_len = (ulong)&__init_end - gd->relocaddr;
 #endif
 #if defined(CONFIG_MPC85xx) || defined(CONFIG_MPC86xx)
@@ -256,12 +253,26 @@ static int initr_malloc(void)
 {
 	ulong malloc_start;
 
+#ifdef CONFIG_SYS_MALLOC_F_LEN
+	debug("Pre-reloc malloc() used %#lx bytes (%ld KB)\n", gd->malloc_ptr,
+	      gd->malloc_ptr / 1024);
+#endif
 	/* The malloc area is immediately below the monitor copy in DRAM */
 	malloc_start = gd->relocaddr - TOTAL_MALLOC_LEN;
 	mem_malloc_init((ulong)map_sysmem(malloc_start, TOTAL_MALLOC_LEN),
 			TOTAL_MALLOC_LEN);
 	return 0;
 }
+
+#ifdef CONFIG_DM
+static int initr_dm(void)
+{
+	/* Save the pre-reloc driver model and start a new one */
+	gd->dm_root_f = gd->dm_root;
+	gd->dm_root = NULL;
+	return dm_init_and_scan(false);
+}
+#endif
 
 __weak int power_init_board(void)
 {
@@ -270,7 +281,11 @@ __weak int power_init_board(void)
 
 static int initr_announce(void)
 {
+#ifndef CONFIG_SKIP_RELOCATE_UBOOT
 	debug("Now running in RAM - U-Boot at: %08lx\n", gd->relocaddr);
+#else
+	debug("Now running in RAM - U-Boot at: %08lx\n", CONFIG_SYS_TEXT_BASE);
+#endif
 	return 0;
 }
 
@@ -389,6 +404,15 @@ int initr_dataflash(void)
 }
 #endif
 
+#ifdef CONFIG_ROCKCHIP
+int initr_rk_storage(void)
+{
+	board_storage_init();
+	return 0;
+}
+#endif
+
+
 /*
  * Tell if it's OK to load the environment early in boot.
  *
@@ -498,6 +522,7 @@ static int show_model_r(void)
 # else
 	checkboard();
 # endif
+	return 0;
 }
 #endif
 
@@ -557,21 +582,19 @@ static int initr_status_led(void)
 #if defined(CONFIG_CMD_SCSI)
 static int initr_scsi(void)
 {
-	/* Not supported properly on ARM yet */
-#ifndef CONFIG_ARM
 	puts("SCSI:  ");
 	scsi_init();
-#endif
 
 	return 0;
 }
-#endif /* CONFIG_CMD_NET */
+#endif
 
 #if defined(CONFIG_CMD_DOC)
 static int initr_doc(void)
 {
 	puts("DOC:   ");
 	doc_init();
+	return 0;
 }
 #endif
 
@@ -648,7 +671,7 @@ int initr_mem(void)
 	/* Also take the logbuffer into account (pram is in kB) */
 	pram += (LOGBUFF_LEN + LOGBUFF_OVERHEAD) / 1024;
 # endif
-	sprintf(memsz, "%ldk", (gd->ram_size / 1024) - pram);
+	sprintf(memsz, "%ldk", (long int) ((gd->ram_size / 1024) - pram));
 	setenv("mem", memsz);
 
 	return 0;
@@ -669,17 +692,6 @@ static int initr_kbd(void)
 {
 	puts("PS/2:  ");
 	kbd_init();
-	return 0;
-}
-#endif
-
-#ifdef CONFIG_MODEM_SUPPORT
-static int initr_modem(void)
-{
-	/* TODO: with new initcalls, move this into the driver */
-	extern int do_mdm_init;
-
-	do_mdm_init = gd->do_mdm_init;
 	return 0;
 }
 #endif
@@ -710,6 +722,18 @@ init_fnc_t init_sequence_r[] = {
 	/* TODO: could x86/PPC have this also perhaps? */
 #ifdef CONFIG_ARM
 	initr_caches,
+#endif
+	initr_reloc_global_data,
+#if defined(CONFIG_SYS_INIT_RAM_LOCK) && defined(CONFIG_E500)
+	initr_unlock_ram_in_cache,
+#endif
+	initr_barrier,
+	initr_malloc,
+	bootstage_relocate,
+#ifdef CONFIG_DM
+	initr_dm,
+#endif
+#ifdef CONFIG_ARM
 	board_init,	/* Setup chipselects */
 #endif
 	/*
@@ -721,7 +745,7 @@ init_fnc_t init_sequence_r[] = {
 #ifdef CONFIG_CLOCKS
 	set_cpu_clk_info, /* Setup clock information */
 #endif
-	initr_reloc_global_data,
+	stdio_init_tables,
 	initr_serial,
 	initr_announce,
 	INIT_FUNC_WATCHDOG_RESET
@@ -745,9 +769,6 @@ init_fnc_t init_sequence_r[] = {
 #ifdef CONFIG_SYS_DELAYED_ICACHE
 	initr_icache_enable,
 #endif
-#if defined(CONFIG_SYS_INIT_RAM_LOCK) && defined(CONFIG_E500)
-	initr_unlock_ram_in_cache,
-#endif
 #if defined(CONFIG_PCI) && defined(CONFIG_SYS_EARLY_PCI_INIT)
 	/*
 	 * Do early PCI configuration _before_ the flash gets initialised,
@@ -758,9 +779,6 @@ init_fnc_t init_sequence_r[] = {
 #ifdef CONFIG_WINBOND_83C553
 	initr_w83c553f,
 #endif
-	initr_barrier,
-	initr_malloc,
-	bootstage_relocate,
 #ifdef CONFIG_ARCH_EARLY_INIT_R
 	arch_early_init_r,
 #endif
@@ -791,6 +809,9 @@ init_fnc_t init_sequence_r[] = {
 #ifdef CONFIG_HAS_DATAFLASH
 	initr_dataflash,
 #endif
+#ifdef CONFIG_ROCKCHIP
+	initr_rk_storage,
+#endif
 	initr_env,
 	INIT_FUNC_WATCHDOG_RESET
 	initr_secondary_cpu,
@@ -810,7 +831,7 @@ init_fnc_t init_sequence_r[] = {
 	 */
 	initr_pci,
 #endif
-	stdio_init,
+	stdio_add_devices,
 	initr_jumptable,
 #ifdef CONFIG_API
 	initr_api,
@@ -895,9 +916,6 @@ init_fnc_t init_sequence_r[] = {
 #ifdef CONFIG_PS2KBD
 	initr_kbd,
 #endif
-#ifdef CONFIG_MODEM_SUPPORT
-	initr_modem,
-#endif
 	run_main_loop,
 };
 
@@ -907,7 +925,7 @@ void board_init_r(gd_t *new_gd, ulong dest_addr)
 	int i;
 #endif
 
-#ifndef CONFIG_X86
+#if !defined(CONFIG_X86) && !defined(CONFIG_ARM) && !defined(CONFIG_ARM64)
 	gd = new_gd;
 #endif
 

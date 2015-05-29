@@ -37,7 +37,6 @@
 /*
  * SPL
  */
-#define CONFIG_SPL
 #define CONFIG_SPL_TARGET	"u-boot-with-spl.bin"
 #define CONFIG_SPL_LDSCRIPT	"arch/$(ARCH)/cpu/u-boot-spl.lds"
 #define CONFIG_SPL_MAX_SIZE	2048
@@ -354,11 +353,6 @@
 #define CONFIG_RTC_DS1374
 #define CONFIG_SYS_RTC_BUS_NUM		0
 #endif /* CONFIG_CMD_DATE */
-
-/*
- * Clocks
- */
-#define	CONFIG_SYS_HZ			1000	/* Ticks per second */
 
 /*
  * PLL

@@ -86,7 +86,7 @@ void spl_parse_image_header(const struct image_header *header)
 		spl_image.os = image_get_os(header);
 		spl_image.name = image_get_name(header);
 		debug("spl: payload image: %.*s load addr: 0x%x size: %d\n",
-			sizeof(spl_image.name), spl_image.name,
+			(int)sizeof(spl_image.name), spl_image.name,
 			spl_image.load_addr, spl_image.size);
 	} else {
 		/* Signature not found - assume u-boot.bin */
@@ -208,6 +208,11 @@ void board_init_r(gd_t *dummy1, ulong dummy2)
 #ifdef CONFIG_SPL_USB_SUPPORT
 	case BOOT_DEVICE_USB:
 		spl_usb_load_image();
+		break;
+#endif
+#ifdef CONFIG_SPL_SATA_SUPPORT
+	case BOOT_DEVICE_SATA:
+		spl_sata_load_image();
 		break;
 #endif
 	default:

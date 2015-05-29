@@ -19,6 +19,7 @@ SECTIONS
 	. = CONFIG_SPL_TEXT_BASE;
 	.text.0	:
 	{
+		*(.vectors)
 		arch/arm/cpu/pxa/start.o		(.text*)
 		arch/arm/lib/built-in.o			(.text*)
 		board/vpac270/built-in.o		(.text*)
@@ -54,7 +55,12 @@ SECTIONS
 
 	. = ALIGN(0x800);
 
-	_end = .;
+	.end :
+	{
+		*(.__end)
+	}
+
+	_image_binary_end = .;
 
 	.bss __rel_dyn_start (OVERLAY) : {
 		__bss_start = .;
@@ -63,7 +69,7 @@ SECTIONS
 		__bss_end = .;
 	}
 
-	.dynsym _end : { *(.dynsym) }
+	.dynsym _image_binary_end : { *(.dynsym) }
 	.dynbss : { *(.dynbss) }
 	.dynstr : { *(.dynstr*) }
 	.dynamic : { *(.dynamic*) }

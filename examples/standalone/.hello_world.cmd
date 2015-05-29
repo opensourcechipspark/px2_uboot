@@ -1,0 +1,1 @@
+cmd_examples/standalone/hello_world := /home/xxh/popmetal/u-boot/../prebuilts/gcc/linux-x86/arm/arm-eabi-4.7/bin/arm-eabi-ld.bfd   -g -Ttext 0xc100000 -o examples/standalone/hello_world -e hello_world examples/standalone/hello_world.o examples/standalone/libstubs.o -L /home/xxh/popmetal/prebuilts/gcc/linux-x86/arm/arm-eabi-4.7/bin/../lib/gcc/arm-eabi/4.7 -lgcc

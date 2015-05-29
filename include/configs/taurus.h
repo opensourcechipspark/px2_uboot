@@ -24,6 +24,8 @@
 #define MACH_TYPE_TAURUS		2067
 #define MACH_TYPE_AXM			2068
 
+#define CONFIG_SYS_GENERIC_BOARD
+
 /*
  * Warning: changing CONFIG_SYS_TEXT_BASE requires
  * adapting the initial boot program.
@@ -37,7 +39,6 @@
 /* ARM asynchronous clock */
 #define CONFIG_SYS_AT91_SLOW_CLOCK	32768		/* slow clock xtal */
 #define CONFIG_SYS_AT91_MAIN_CLOCK	18432000	/* main clock xtal */
-#define CONFIG_SYS_HZ			1000
 
 /* Misc CPU related */
 #define CONFIG_ARCH_CPU_INIT

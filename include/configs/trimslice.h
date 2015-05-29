@@ -8,13 +8,8 @@
 #ifndef __CONFIG_H
 #define __CONFIG_H
 
-#include <asm/sizes.h>
+#include <linux/sizes.h>
 #include "tegra20-common.h"
-
-/* Enable fdt support for TrimSlice. Flash the image in u-boot-dtb.bin */
-#define CONFIG_DEFAULT_DEVICE_TREE	tegra20-trimslice
-#define CONFIG_OF_CONTROL
-#define CONFIG_OF_SEPARATE
 
 /* High-level configuration options */
 #define V_PROMPT		"Tegra20 (TrimSlice) # "

@@ -8,7 +8,6 @@
 #ifndef __CORE_PMIC_H_
 #define __CORE_PMIC_H_
 
-#include <common.h>
 #include <linux/list.h>
 #include <i2c.h>
 #include <power/power_chrg.h>
@@ -17,6 +16,11 @@ enum { PMIC_I2C, PMIC_SPI, PMIC_NONE};
 enum { I2C_PMIC, I2C_NUM, };
 enum { PMIC_READ, PMIC_WRITE, };
 enum { PMIC_SENSOR_BYTE_ORDER_LITTLE, PMIC_SENSOR_BYTE_ORDER_BIG, };
+
+enum {
+	PMIC_CHARGER_DISABLE,
+	PMIC_CHARGER_ENABLE,
+};
 
 struct p_i2c {
 	unsigned char addr;
@@ -79,7 +83,16 @@ struct  pmic_voltage{
         int             vol;
 };
 
+struct fdt_regulator_match {
+	const char *prop;
+	const char *name;
+	int min_uV;
+	int max_uV;
+	int boot_on;
+};
+
 int pmic_init(unsigned char bus);
+int power_init_board(void);
 int pmic_dialog_init(unsigned char bus);
 int check_reg(struct pmic *p, u32 reg);
 struct pmic *pmic_alloc(void);
@@ -89,6 +102,9 @@ int pmic_reg_read(struct pmic *p, u32 reg, u32 *val);
 int pmic_reg_write(struct pmic *p, u32 reg, u32 val);
 int pmic_set_output(struct pmic *p, u32 reg, int ldo, int on);
 int pmic_get_vol(char *name);
+int fdt_regulator_match(const void *blob, int node ,
+		struct fdt_regulator_match *matches, int num_matches);
+int fdt_get_regulator_node(const void * blob,int parent_nd);
 
 
 #define pmic_i2c_addr (p->hw.i2c.addr)
@@ -97,11 +113,9 @@ int pmic_get_vol(char *name);
 #define pmic_spi_bitlen (p->hw.spi.bitlen)
 #define pmic_spi_flags (p->hw.spi.flags)
 
-#ifdef CONFIG_POWER_RICOH619
 int check_charge(void);
 int pmic_charger_setting(int current);
 void shut_down(void);
-#endif
-
+int fg_init(unsigned char bus);
 
 #endif /* __CORE_PMIC_H_ */

@@ -26,8 +26,6 @@ void lcd_enable(void);
 void lcd_setcolreg(ushort regno, ushort red, ushort green, ushort blue);
 void lcd_initcolregs(void);
 
-int lcd_getfgcolor(void);
-
 /* gunzip_bmp used if CONFIG_VIDEO_BMP_GZIP */
 struct bmp_image *gunzip_bmp(unsigned long addr, unsigned long *lenp,
 			     void **alloc_addr);
@@ -223,6 +221,8 @@ typedef struct vidinfo {
 	unsigned int logo_on;
 	unsigned int logo_width;
 	unsigned int logo_height;
+	int logo_x_offset;
+	int logo_y_offset;
 	unsigned long logo_addr;
 	unsigned int rgb_mode;
 	unsigned int resolution;
@@ -239,18 +239,6 @@ void init_panel_info(vidinfo_t *vid);
 
 #elif defined(CONFIG_RK_FB)
 
-enum exynos_fb_rgb_mode_t {
-	OUT_P888 = 0,
-	OUT_P666 = 1,
-	OUT_P565 = 2,
-	OUT_S888x = 4,
-	OUT_CCIR656 = 6,
-	OUT_S888 = 8,
-	OUT_S888DUMY = 12,
-	OUT_P16BPP4 = 24,
-	OUT_D888_P666 = 0x21,
-	OUT_D888_P565 = 0x22,
-};
 #ifdef CONFIG_RK_3168_FB
 enum exynos_fb_data_format_t {
 	RGB888 = 0,
@@ -278,15 +266,6 @@ enum lay_id {
 	NUM_LAYERS,
 };
 
-enum screen_tpye {
-	SCREEN_NULL = 0,
-	SCREEN_RGB  = 1,
-	SCREEN_LVDS = 2,
-	SCREEN_MCU  = 3,
-	SCREEN_TVOUT = 4,
-	SCREEN_HDMI  = 5,
-	SCREEN_MIPI  = 6,
-};
 
 struct fb_dsp_info{
 	enum lay_id layer_id;
@@ -309,16 +288,16 @@ struct layer_par {
 	u8 fmt_cfg;
 };
 typedef struct vidinfo {
-    u_char lcd_face;    /* lcd rgb tye (i.e. RGB888) */
+	u_char lcd_face;    /* lcd rgb tye (i.e. RGB888) */
 	ushort vl_col;		/* Number of columns (i.e. 640) */
 	ushort vl_row;		/* Number of rows (i.e. 480) */
 	ushort vl_width;	/* Width of display area in millimeters */
 	ushort vl_height;	/* Height of display area in millimeters */
 
 	/* LCD configuration register */
-	u_char vl_freq;		/* Frequency */
+	int vl_freq;		/* Frequency */
 	u_char vl_clkp;		/* Clock polarity */
-    u_char vl_oep;		/* Output Enable polarity */
+	u_char vl_oep;		/* Output Enable polarity */
 	u_char vl_hsp;		/* Horizontal Sync polarity */
 	u_char vl_vsp;		/* Vertical Sync polarity */
 	u_char vl_bpix;		/* Bits per pixel */
@@ -335,27 +314,24 @@ typedef struct vidinfo {
 	u_char  vl_swap_rb;
 	struct layer_par par[NUM_LAYERS];
 
-	void (*backlight_on)(int brightness);
-	void (*lcd_power_on)(void);
-	void (*enable_ldo)(unsigned int onoff);
-	void (*mipi_power)(void);
-
-	unsigned int win_id;
+	unsigned int lcdc_id;
 	unsigned int init_delay;
 	unsigned int power_on_delay;
 	unsigned int reset_delay;
 	unsigned int interface_mode;
-	unsigned int mipi_enabled;
-	unsigned int dp_enabled;
+	unsigned int lvds_format;
+	unsigned int lvds_ttl_en;
 	unsigned int cs_setup;
 	unsigned int wr_setup;
-	unsigned int logo_on;
 	unsigned int logo_width;
 	unsigned int logo_height;
 	unsigned long logo_addr;
 	unsigned int logo_rgb_mode;
 	unsigned int resolution;
-
+	unsigned int real_freq;
+	unsigned int pixelrepeat;
+	unsigned int vmode;//interlace mode
+    
 	/* parent clock name(MPLL, EPLL or VPLL) */
 	unsigned int pclk_name;
 	/* ratio value for source clock from parent clock. */
@@ -363,29 +339,17 @@ typedef struct vidinfo {
 
 	unsigned int dual_lcd_enabled;
 		
-#ifdef CONFIG_RK616
+
     	u_char screen_type;
-#ifdef CONFIG_RK616_LVDS
-    	u_char lvds_format;
     	u_char lvds_ch_nr;
-#endif
-#endif
+
 } vidinfo_t;
 
 void init_panel_info(vidinfo_t *vid);
-void rk30_lcdc_set_par(struct fb_dsp_info *fb_info, vidinfo_t *vid);
-int rk30_load_screen(vidinfo_t *vid);
-int rk30_lcdc_init();
+void rk_lcdc_set_par(struct fb_dsp_info *fb_info, vidinfo_t *vid);
+int rk_lcdc_load_screen(vidinfo_t *vid);
+int rk_lcdc_init(int lcdc_id);
 void get_rk_logo_info(vidinfo_t *vid);
-
-#ifdef CONFIG_RK616
-#define LVDS_8BIT_1     0
-#define LVDS_8BIT_2     1
-#define LVDS_8BIT_3     2
-#define LVDS_6BIT       3
-
-int rk616_power_on(void);
-#endif /*CONFIG_RK616*/
 
 #else
 
@@ -406,15 +370,14 @@ extern vidinfo_t panel_info;
 
 /* Video functions */
 
-#if defined(CONFIG_RBC823)
-void	lcd_disable(void);
-#endif
-
 void	lcd_putc(const char c);
 void	lcd_puts(const char *s);
 void	lcd_printf(const char *fmt, ...);
 void	lcd_clear(void);
 int	lcd_display_bitmap(ulong bmp_image, int x, int y);
+
+int lcd_display_bitmap_center(ulong bmp_image);
+void lcd_enable_logo(bool enable);
 
 /**
  * Get the width of the LCD in pixels
@@ -461,6 +424,9 @@ int lcd_get_size(int *line_length);
 int lcd_dt_simplefb_add_node(void *blob);
 int lcd_dt_simplefb_enable_existing_node(void *blob);
 
+/* Update the LCD / flush the cache */
+void lcd_sync(void);
+
 /************************************************************************/
 /* ** BITMAP DISPLAY SUPPORT						*/
 /************************************************************************/
@@ -482,7 +448,7 @@ int lcd_dt_simplefb_enable_existing_node(void *blob);
 #define LCD_COLOR4	2
 #define LCD_COLOR8	3
 #define LCD_COLOR16	4
-
+#define LCD_COLOR32	5
 /*----------------------------------------------------------------------*/
 #if defined(CONFIG_LCD_INFO_BELOW_LOGO)
 # define LCD_INFO_X		0
@@ -532,6 +498,21 @@ int lcd_dt_simplefb_enable_existing_node(void *blob);
 # define CONSOLE_COLOR_CYAN	6
 # define CONSOLE_COLOR_GREY	14
 # define CONSOLE_COLOR_WHITE	15	/* Must remain last / highest	*/
+
+#elif LCD_BPP == LCD_COLOR32
+/*
+ * 32bpp color definitions
+ */
+# define CONSOLE_COLOR_RED	0x00ff0000
+# define CONSOLE_COLOR_GREEN	0x0000ff00
+# define CONSOLE_COLOR_YELLOW	0x00ffff00
+# define CONSOLE_COLOR_BLUE	0x000000ff
+# define CONSOLE_COLOR_MAGENTA	0x00ff00ff
+# define CONSOLE_COLOR_CYAN	0x0000ffff
+# define CONSOLE_COLOR_GREY	0x00aaaaaa
+# define CONSOLE_COLOR_BLACK	0x00000000
+# define CONSOLE_COLOR_WHITE	0x00ffffff	/* Must remain last / highest*/
+# define NBYTES(bit_code)	(NBITS(bit_code) >> 3)
 
 #else
 

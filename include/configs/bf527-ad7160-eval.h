@@ -137,7 +137,6 @@
 #define CONFIG_MISC_INIT_R
 #define CONFIG_UART_CONSOLE	0
 
-
 /*
  * Pull in common ADI header for remaining command/environment setup
  */

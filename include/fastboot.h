@@ -61,19 +61,10 @@
 
 #include <common.h>
 #include <command.h>
+#include <part.h>
 
 /* This is the interface file between the common cmd_fastboot.c and
    the board specific support.
-
-   To use this interface, define CONFIG_FASTBOOT in your board config file.
-   An example is include/configs/omap3430labrador.h
-   ...
-   #define CONFIG_FASTBOOT	        1    / * Using fastboot interface * /
-   ...
-
-   An example of the board specific spupport for omap3 is found at
-   cpu/omap3/fastboot.c
-
 */
 
 /* From fastboot client.. */
@@ -81,6 +72,7 @@
 #define FASTBOOT_INTERFACE_SUB_CLASS 0x42
 #define FASTBOOT_INTERFACE_PROTOCOL  0x03
 
+#define FASTBOOT_UNLOCKED_ENV_NAME "fastboot_unlocked"
 #define FASTBOOT_SERIALNO_BOOTARG "androidboot.serialno"
 
 /* The fastboot client uses a value of 2048 for the
@@ -106,17 +98,17 @@
 
 /* sparse things */
 typedef struct sparse_header {
-  __le32    magic;      /* 0xed26ff3a */
-  __le16    major_version;  /* (0x1) - reject images with higher major versions */
-  __le16    minor_version;  /* (0x0) - allow images with higer minor versions */
-  __le16    file_hdr_sz;    /* 28 bytes for first revision of the file format */
-  __le16    chunk_hdr_sz;   /* 12 bytes for first revision of the file format */
-  __le32    blk_sz;     /* block size in bytes, must be a multiple of 4 (4096) */
-  __le32    total_blks; /* total blocks in the non-sparse output image */
-  __le32    total_chunks;   /* total chunks in the sparse input image */
-  __le32    image_checksum; /* CRC32 checksum of the original data, counting "don't care" */
-                /* as 0. Standard 802.3 polynomial, use a Public Domain */
-                /* table implementation */
+	__le32    magic;      /* 0xed26ff3a */
+	__le16    major_version;  /* (0x1) - reject images with higher major versions */
+	__le16    minor_version;  /* (0x0) - allow images with higer minor versions */
+	__le16    file_hdr_sz;    /* 28 bytes for first revision of the file format */
+	__le16    chunk_hdr_sz;   /* 12 bytes for first revision of the file format */
+	__le32    blk_sz;     /* block size in bytes, must be a multiple of 4 (4096) */
+	__le32    total_blks; /* total blocks in the non-sparse output image */
+	__le32    total_chunks;   /* total chunks in the sparse input image */
+	__le32    image_checksum; /* CRC32 checksum of the original data, counting "don't care" */
+	/* as 0. Standard 802.3 polynomial, use a Public Domain */
+	/* table implementation */
 } sparse_header_t;
 
 #define SPARSE_HEADER_MAGIC 0xed26ff3a
@@ -126,10 +118,10 @@ typedef struct sparse_header {
 #define CHUNK_TYPE_DONT_CARE    0xCAC3
 
 typedef struct chunk_header {
-  __le16    chunk_type; /* 0xCAC1 -> raw; 0xCAC2 -> fill; 0xCAC3 -> don't care */
-  __le16    reserved1;
-  __le32    chunk_sz;   /* in blocks in output image */
-  __le32    total_sz;   /* in bytes of chunk input file including chunk header and data */
+	__le16    chunk_type; /* 0xCAC1 -> raw; 0xCAC2 -> fill; 0xCAC3 -> don't care */
+	__le16    reserved1;
+	__le32    chunk_sz;   /* in blocks in output image */
+	__le32    total_sz;   /* in bytes of chunk input file including chunk header and data */
 } chunk_header_t;
 
 #define SPARSE_HEADER_MAJOR_VER 1
@@ -139,6 +131,7 @@ typedef struct chunk_header {
  */
 /* end sparse things */
 
+#define USB_MAX_TRANS_SIZE  0x20000
 struct cmd_fastboot_interface {
 
 	/* A getvar string for the serial number
@@ -147,8 +140,9 @@ struct cmd_fastboot_interface {
 	   Set by board */
 	char *serial_no;
 
-    //fastboot likely to query partition-type before do flash.
-    struct fbt_partition *pending_ptn;
+	//fastboot likely to query partition-type before do flash.
+	const disk_partition_t *pending_ptn;
+	char pending_ptn_name[32];//see include/part.h
 
 	/* Transfer buffer, for handling flash updates
 	   Should be multiple of the block size
@@ -156,10 +150,11 @@ struct cmd_fastboot_interface {
 	   Controlled by the configure variable CONFIG_FASTBOOT_TRANSFER_BUFFER
 
 	   Set by board */
-    u8 *buffer[2];
+	u8 *buffer[2];
 	u8 *transfer_buffer;
-
-    u64 transfer_buffer_pos;
+	
+	//d_legacy set to 0, when we use double buffer to accelerate download.
+	u8 d_legacy;
 
 	/* How big is the transfer buffer
 	   Controlled by the configure variable
@@ -169,20 +164,24 @@ struct cmd_fastboot_interface {
 	u64 transfer_buffer_size;
 
 	/* Download size, if download has to be done. This can be checked to find
-		whether next packet is a command or a data */
+	   whether next packet is a command or a data */
 	u64 d_size;
 
 	/* Data downloaded so far */
 	u64 d_bytes;
 
-    /* Download status, < 0 when error, > 0 when complete */
-    int d_status;
+	/* Download status, < 0 when error, > 0 when complete */
+	int d_status;
 
-    /* Download size, copy downloaded data to storage */ 
-    u64 d_direct_size;
+	/* Download size, copy downloaded data to storage */ 
+	u64 d_direct_size;
 
-    /* Offset of storage, will download 'd_direct_size' data to this offset */
-    u64 d_direct_offset;
+	/* Offset of storage, will download 'd_direct_size' data to this offset */
+	u64 d_direct_offset;
+
+	/* May cache some data here. */
+	unsigned char d_cache[USB_MAX_TRANS_SIZE + RK_BLK_SIZE];
+	int d_cache_pos;
 
 	/* Upload size, if download has to be done */
 	u64 u_size;
@@ -209,17 +208,17 @@ struct cmd_fastboot_interface {
 	unsigned long unlock_pending_start_time;
 
 	/* device specific info */
-    /*
-	unsigned int dev_info_uninitialized;
-	unsigned int num_device_info;
-	struct device_info dev_info[FASTBOOT_MAX_NUM_DEVICE_INFO];
-    */
-    //TODO:maybe we need device info?
-    
-    /* sparse things */
-    int flag_sparse;
-    sparse_header_t sparse_header;
-    int sparse_cur_chunk;
+	/*
+	   unsigned int dev_info_uninitialized;
+	   unsigned int num_device_info;
+	   struct device_info dev_info[FASTBOOT_MAX_NUM_DEVICE_INFO];
+	   */
+	//TODO:maybe we need device info?
+
+	/* sparse things */
+	int flag_sparse;
+	sparse_header_t sparse_header;
+	int sparse_cur_chunk;
 };
 
 /* Status values */
@@ -228,91 +227,45 @@ struct cmd_fastboot_interface {
 #define FASTBOOT_DISCONNECT		1
 #define FASTBOOT_INACTIVE		2
 
-/* Android bootimage file format */
-#define FASTBOOT_BOOT_MAGIC "ANDROID!"
-#define FASTBOOT_BOOT_MAGIC_SIZE 8
-#define FASTBOOT_BOOT_NAME_SIZE 16
-#define FASTBOOT_BOOT_ARGS_SIZE 512
 
-
-/* in a board specific file */
-typedef struct fbt_partition {
-    const char *name;
-    unsigned offset;
-    unsigned size_kb;
-} fbt_partition_t;
-
-extern struct fbt_partition fbt_partitions[];
-
-#define FBT_PARTITION_MAX_NUM 16
-
-#define PARAMETER_NAME  "parameter"
-#define LOADER_NAME     "loader"
-#define UBOOT_NAME      "uboot"
-#define MISC_NAME       "misc"
-#define KERNEL_NAME     "kernel"
-#define BOOT_NAME       "boot"
-#define RECOVERY_NAME   "recovery"
-#define SYSTEM_NAME     "system"
-#define BACKUP_NAME     "backup"
-
-struct fastboot_boot_img_hdr {
-	unsigned char magic[FASTBOOT_BOOT_MAGIC_SIZE];
-
-	unsigned kernel_size;  /* size in bytes */
-	unsigned kernel_addr;  /* physical load addr */
-
-	unsigned ramdisk_size; /* size in bytes */
-	unsigned ramdisk_addr; /* physical load addr */
-
-	unsigned second_size;  /* size in bytes */
-	unsigned second_addr;  /* physical load addr */
-
-	unsigned tags_addr;    /* physical addr for kernel tags */
-	unsigned page_size;    /* flash page size we assume */
-	unsigned unused[2];    /* future expansion: should be 0 */
-
-	unsigned char name[FASTBOOT_BOOT_NAME_SIZE]; /* asciiz product name */
-
-	unsigned char cmdline[FASTBOOT_BOOT_ARGS_SIZE];
-
-	unsigned id[8]; /* timestamp / checksum / sha1 / etc */
-};
-
-struct bootloader_message;
-
-#ifdef	CONFIG_CMD_FASTBOOT
 enum fbt_reboot_type {
-	FASTBOOT_REBOOT_UNKNOWN, /* typically for a cold boot */
-	FASTBOOT_REBOOT_NORMAL,
-	FASTBOOT_REBOOT_BOOTLOADER, //rockusb
-	FASTBOOT_REBOOT_RECOVERY,
-	FASTBOOT_REBOOT_NONE,
-	FASTBOOT_REBOOT_RECOVERY_WIPE_DATA,
-	FASTBOOT_REBOOT_FASTBOOT,
-	FASTBOOT_REBOOT_CHARGE,
+	FASTBOOT_REBOOT_UNKNOWN,		/* typically for a cold boot */
+	FASTBOOT_REBOOT_NORMAL,			/* normal */
+	FASTBOOT_REBOOT_BOOTLOADER,		/* rockusb */
+	FASTBOOT_REBOOT_RECOVERY,		/* recovery */
+	FASTBOOT_REBOOT_RECOVERY_WIPE_DATA,	/* recovery and wipe data */
+	FASTBOOT_REBOOT_FASTBOOT,		/* android fastboot */
+	FASTBOOT_REBOOT_CHARGE,			/* charge */
 };
-extern void fbt_preboot(void);
+
 
 #ifdef CONFIG_FASTBOOT_LOG
 extern int fbt_send_info(const char *info);
 extern int fbt_log(const char *str, const int len, bool send);
 #endif
 
-int board_fbt_oem(const char *cmdbuf);
+int board_fbt_is_cold_boot(void);
+int board_fbt_is_charging(void);
 void board_fbt_set_reboot_type(enum fbt_reboot_type frt);
 /* gets the reboot type, automatically clearing it for next boot */
 enum fbt_reboot_type board_fbt_get_reboot_type(void);
 int board_fbt_key_pressed(void);
-void board_fbt_finalize_bootargs(char* args, size_t buf_sz, 
-        size_t ramdisk_sz, int recovery);
-int board_fbt_handle_flash(char *name,
-        struct cmd_fastboot_interface *priv);
+void board_fbt_finalize_bootargs(char* args, int buf_sz, 
+		int ramdisk_addr, int ramdisk_sz, int recovery);
+void board_fbt_boot_failed(const char* boot);
+#ifdef CONFIG_CMD_FASTBOOT
+int board_fbt_oem(const char *cmdbuf);
+int board_fbt_handle_erase(const disk_partition_t *ptn);
+int board_fbt_handle_flash(const char *name, const disk_partition_t *ptn,
+		struct cmd_fastboot_interface *priv);
 int board_fbt_handle_download(unsigned char *buffer,
-        int length, struct cmd_fastboot_interface *priv);
-int board_fbt_check_misc();
-int board_fbt_set_bootloader_msg(struct bootloader_message* bmsg);
-struct fbt_partition *fastboot_find_ptn(const char *name);
+		int length, struct cmd_fastboot_interface *priv);
+#endif
+int board_fbt_load_partition_table(void);
+const disk_partition_t* board_fbt_get_partition(const char* name);
+void board_fbt_run_recovery_wipe_data(void);
+void board_fbt_preboot(void);
+
 
 #define FBT_ERR
 #undef  FBT_WARN
@@ -321,33 +274,30 @@ struct fbt_partition *fastboot_find_ptn(const char *name);
 
 #ifdef FBT_DEBUG
 #define FBTDBG(fmt, args...)\
-    printf("DEBUG: [%s]: %d:\n"fmt, __func__, __LINE__, ##args)
+	printf("DEBUG: [%s]: %d:\n"fmt, __func__, __LINE__, ##args)
 #else
 #define FBTDBG(fmt, args...) do {} while (0)
 #endif
 
 #ifdef FBT_INFO
 #define FBTINFO(fmt, args...)\
-    printf("INFO: [%s]: "fmt, __func__, ##args)
+	printf("INFO: [%s]: "fmt, __func__, ##args)
 #else
 #define FBTINFO(fmt, args...) do {} while (0)
 #endif
 
 #ifdef FBT_WARN
 #define FBTWARN(fmt, args...)\
-    printf("WARNING: [%s]: "fmt, __func__, ##args)
+	printf("WARNING: [%s]: "fmt, __func__, ##args)
 #else
 #define FBTWARN(fmt, args...) do {} while (0)
 #endif
 
 #ifdef FBT_ERR
 #define FBTERR(fmt, args...)\
-    printf("ERROR: [%s]: "fmt, __func__, ##args)
+	printf("ERROR: [%s]: "fmt, __func__, ##args)
 #else
 #define FBTERR(fmt, args...) do {} while (0)
 #endif
 
-extern char PRODUCT_NAME[20];
-
-#endif /* CONFIG_CMD_FASTBOOT */
 #endif /* FASTBOOT_H */

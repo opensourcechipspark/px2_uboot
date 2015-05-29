@@ -1,5 +1,6 @@
 /*
  * Copyright 2010-2011 Calxeda, Inc.
+ * Copyright (c) 2014, NVIDIA CORPORATION.  All rights reserved.
  *
  * SPDX-License-Identifier:	GPL-2.0+
  */
@@ -14,6 +15,7 @@
 #include <fs.h>
 
 #include "menu.h"
+#include "cli.h"
 
 #define MAX_TFTP_PATH_LEN 127
 
@@ -45,6 +47,7 @@ static char *from_env(const char *envvar)
 	return ret;
 }
 
+#ifdef CONFIG_CMD_NET
 /*
  * Convert an ethaddr from the environment to the format used by pxelinux
  * filenames based on mac addresses. Convert's ':' to '-', and adds "01-" to
@@ -75,6 +78,7 @@ static int format_mac_pxe(char *outbuf, size_t outbuf_len)
 
 	return 1;
 }
+#endif
 
 /*
  * Returns the directory the file specified in the bootfile env variable is
@@ -120,6 +124,7 @@ static int get_bootfile_path(const char *file_path, char *bootfile_path,
 
 static int (*do_getfile)(cmd_tbl_t *cmdtp, const char *file_path, char *file_addr);
 
+#ifdef CONFIG_CMD_NET
 static int do_get_tftp(cmd_tbl_t *cmdtp, const char *file_path, char *file_addr)
 {
 	char *tftp_argv[] = {"tftp", NULL, NULL, NULL};
@@ -132,6 +137,7 @@ static int do_get_tftp(cmd_tbl_t *cmdtp, const char *file_path, char *file_addr)
 
 	return 1;
 }
+#endif
 
 static char *fs_argv[5];
 
@@ -248,6 +254,8 @@ static int get_pxe_file(cmd_tbl_t *cmdtp, const char *file_path, void *file_addr
 
 	return 1;
 }
+
+#ifdef CONFIG_CMD_NET
 
 #define PXELINUX_DIR "pxelinux.cfg/"
 
@@ -397,6 +405,7 @@ do_pxe_get(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 
 	return 1;
 }
+#endif
 
 /*
  * Wrapper to make it easier to store the file at file_path in the location
@@ -570,8 +579,12 @@ static int label_localboot(struct pxe_label *label)
 	if (!localcmd)
 		return -ENOENT;
 
-	if (label->append)
-		setenv("bootargs", label->append);
+	if (label->append) {
+		char bootargs[CONFIG_SYS_CBSIZE];
+
+		cli_simple_process_macros(label->append, bootargs);
+		setenv("bootargs", bootargs);
+	}
 
 	debug("running: %s\n", localcmd);
 
@@ -599,9 +612,10 @@ static int label_boot(cmd_tbl_t *cmdtp, struct pxe_label *label)
 	char initrd_str[22];
 	char mac_str[29] = "";
 	char ip_str[68] = "";
-	char *bootargs;
 	int bootm_argc = 3;
 	int len = 0;
+	ulong kernel_addr;
+	void *buf;
 
 	label_print(label);
 
@@ -644,35 +658,39 @@ static int label_boot(cmd_tbl_t *cmdtp, struct pxe_label *label)
 		sprintf(ip_str, " ip=%s:%s:%s:%s",
 			getenv("ipaddr"), getenv("serverip"),
 			getenv("gatewayip"), getenv("netmask"));
-		len += strlen(ip_str);
 	}
 
+#ifdef CONFIG_CMD_NET
 	if (label->ipappend & 0x2) {
 		int err;
 		strcpy(mac_str, " BOOTIF=");
 		err = format_mac_pxe(mac_str + 8, sizeof(mac_str) - 8);
 		if (err < 0)
 			mac_str[0] = '\0';
-		len += strlen(mac_str);
 	}
+#endif
 
-	if (label->append)
-		len += strlen(label->append);
+	if ((label->ipappend & 0x3) || label->append) {
+		char bootargs[CONFIG_SYS_CBSIZE] = "";
+		char finalbootargs[CONFIG_SYS_CBSIZE];
 
-	if (len) {
-		bootargs = malloc(len + 1);
-		if (!bootargs)
+		if (strlen(label->append ?: "") +
+		    strlen(ip_str) + strlen(mac_str) + 1 > sizeof(bootargs)) {
+			printf("bootarg overflow %zd+%zd+%zd+1 > %zd\n",
+			       strlen(label->append ?: ""),
+			       strlen(ip_str), strlen(mac_str),
+			       sizeof(bootargs));
 			return 1;
-		bootargs[0] = '\0';
+		}
+
 		if (label->append)
 			strcpy(bootargs, label->append);
 		strcat(bootargs, ip_str);
 		strcat(bootargs, mac_str);
 
-		setenv("bootargs", bootargs);
-		printf("append: %s\n", bootargs);
-
-		free(bootargs);
+		cli_simple_process_macros(bootargs, finalbootargs);
+		setenv("bootargs", finalbootargs);
+		printf("append: %s\n", finalbootargs);
 	}
 
 	bootm_argv[1] = getenv("kernel_addr_r");
@@ -700,44 +718,47 @@ static int label_boot(cmd_tbl_t *cmdtp, struct pxe_label *label)
 		if (label->fdt) {
 			fdtfile = label->fdt;
 		} else if (label->fdtdir) {
-			fdtfile = getenv("fdtfile");
-			/*
-			 * For complex cases, it might be worth calling a
-			 * board- or SoC-provided function here to provide a
-			 * better default:
-			 *
-			 * if (!fdtfile)
-			 *     fdtfile = gen_fdtfile();
-			 *
-			 * If this is added, be sure to keep the default below,
-			 * or move it to the default weak implementation of
-			 * gen_fdtfile().
-			 */
-			if (!fdtfile) {
-				char *soc = getenv("soc");
-				char *board = getenv("board");
-				char *slash;
+			char *f1, *f2, *f3, *f4, *slash;
 
-				len = strlen(label->fdtdir);
-				if (!len)
-					slash = "./";
-				else if (label->fdtdir[len - 1] != '/')
-					slash = "/";
-				else
-					slash = "";
-
-				len = strlen(label->fdtdir) + strlen(slash) +
-					strlen(soc) + 1 + strlen(board) + 5;
-				fdtfilefree = malloc(len);
-				if (!fdtfilefree) {
-					printf("malloc fail (FDT filename)\n");
-					return 1;
-				}
-
-				snprintf(fdtfilefree, len, "%s%s%s-%s.dtb",
-					label->fdtdir, slash, soc, board);
-				fdtfile = fdtfilefree;
+			f1 = getenv("fdtfile");
+			if (f1) {
+				f2 = "";
+				f3 = "";
+				f4 = "";
+			} else {
+				/*
+				 * For complex cases where this code doesn't
+				 * generate the correct filename, the board
+				 * code should set $fdtfile during early boot,
+				 * or the boot scripts should set $fdtfile
+				 * before invoking "pxe" or "sysboot".
+				 */
+				f1 = getenv("soc");
+				f2 = "-";
+				f3 = getenv("board");
+				f4 = ".dtb";
 			}
+
+			len = strlen(label->fdtdir);
+			if (!len)
+				slash = "./";
+			else if (label->fdtdir[len - 1] != '/')
+				slash = "/";
+			else
+				slash = "";
+
+			len = strlen(label->fdtdir) + strlen(slash) +
+				strlen(f1) + strlen(f2) + strlen(f3) +
+				strlen(f4) + 1;
+			fdtfilefree = malloc(len);
+			if (!fdtfilefree) {
+				printf("malloc fail (FDT filename)\n");
+				return 1;
+			}
+
+			snprintf(fdtfilefree, len, "%s%s%s%s%s%s",
+				 label->fdtdir, slash, f1, f2, f3, f4);
+			fdtfile = fdtfilefree;
 		}
 
 		if (fdtfile) {
@@ -759,11 +780,15 @@ static int label_boot(cmd_tbl_t *cmdtp, struct pxe_label *label)
 	if (bootm_argv[3])
 		bootm_argc = 4;
 
-	do_bootm(cmdtp, 0, bootm_argc, bootm_argv);
-
+	kernel_addr = genimg_get_kernel_addr(bootm_argv[1]);
+	buf = map_sysmem(kernel_addr, 0);
+	/* Try bootm for legacy and FIT format image */
+	if (genimg_get_format(buf) != IMAGE_FORMAT_INVALID)
+		do_bootm(cmdtp, 0, bootm_argc, bootm_argv);
 #ifdef CONFIG_CMD_BOOTZ
-	/* Try booting a zImage if do_bootm returns */
-	do_bootz(cmdtp, 0, bootm_argc, bootm_argv);
+	/* Try booting a zImage */
+	else
+		do_bootz(cmdtp, 0, bootm_argc, bootm_argv);
 #endif
 	return 1;
 }
@@ -1500,6 +1525,7 @@ static void handle_pxe_menu(cmd_tbl_t *cmdtp, struct pxe_menu *cfg)
 	boot_unattempted_labels(cmdtp, cfg);
 }
 
+#ifdef CONFIG_CMD_NET
 /*
  * Boots a system using a pxe file
  *
@@ -1541,6 +1567,8 @@ do_pxe_boot(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 
 	destroy_pxe_menu(cfg);
 
+	copy_filename(BootFile, "", sizeof(BootFile));
+
 	return 0;
 }
 
@@ -1549,7 +1577,7 @@ static cmd_tbl_t cmd_pxe_sub[] = {
 	U_BOOT_CMD_MKENT(boot, 2, 1, do_pxe_boot, "", "")
 };
 
-int do_pxe(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
+static int do_pxe(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 {
 	cmd_tbl_t *cp;
 
@@ -1576,13 +1604,14 @@ U_BOOT_CMD(
 	"get - try to retrieve a pxe file using tftp\npxe "
 	"boot [pxefile_addr_r] - boot from the pxe file at pxefile_addr_r\n"
 );
+#endif
 
 /*
  * Boots a system using a local disk syslinux/extlinux file
  *
  * Returns 0 on success, 1 on error.
  */
-int do_sysboot(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
+static int do_sysboot(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 {
 	unsigned long pxefile_addr_r;
 	struct pxe_menu *cfg;

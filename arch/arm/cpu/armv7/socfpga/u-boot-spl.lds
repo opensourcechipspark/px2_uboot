@@ -16,6 +16,7 @@ SECTIONS
 	. = ALIGN(4);
 	.text	:
 	{
+		*(.vectors)
 		arch/arm/cpu/armv7/start.o	(.text*)
 		*(.text*)
 	} >.sdram
@@ -28,7 +29,11 @@ SECTIONS
 
 	. = ALIGN(4);
 	__image_copy_end = .;
-	_end = .;
+
+	.end :
+	{
+		*(.__end)
+	}
 
 	.bss : {
 		. = ALIGN(4);

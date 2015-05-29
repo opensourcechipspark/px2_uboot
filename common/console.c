@@ -16,7 +16,6 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
-#ifndef CONFIG_ROCKCHIP
 static int on_console(const char *name, const char *value, enum env_op op,
 	int flags)
 {
@@ -58,7 +57,6 @@ static int on_console(const char *name, const char *value, enum env_op op,
 	}
 }
 U_BOOT_ENV_CALLBACK(console, on_console);
-#endif //CONFIG_ROCKCHIP
 
 #ifdef CONFIG_SILENT_CONSOLE
 static int on_silent(const char *name, const char *value, enum env_op op,
@@ -111,7 +109,7 @@ static int console_setfile(int file, struct stdio_dev * dev)
 	case stderr:
 		/* Start new device */
 		if (dev->start) {
-			error = dev->start();
+			error = dev->start(dev);
 			/* If it's not started dont use it */
 			if (error < 0)
 				break;
@@ -161,7 +159,7 @@ static int console_getc(int file)
 	unsigned char ret;
 
 	/* This is never called with testcdev == NULL */
-	ret = tstcdev->getc();
+	ret = tstcdev->getc(tstcdev);
 	tstcdev = NULL;
 	return ret;
 }
@@ -175,7 +173,7 @@ static int console_tstc(int file)
 	for (i = 0; i < cd_count[file]; i++) {
 		dev = console_devices[file][i];
 		if (dev->tstc != NULL) {
-			ret = dev->tstc();
+			ret = dev->tstc(dev);
 			if (ret > 0) {
 				tstcdev = dev;
 				disable_ctrlc(0);
@@ -196,7 +194,7 @@ static void console_putc(int file, const char c)
 	for (i = 0; i < cd_count[file]; i++) {
 		dev = console_devices[file][i];
 		if (dev->putc != NULL)
-			dev->putc(c);
+			dev->putc(dev, c);
 	}
 }
 
@@ -208,7 +206,7 @@ static void console_puts(int file, const char *s)
 	for (i = 0; i < cd_count[file]; i++) {
 		dev = console_devices[file][i];
 		if (dev->puts != NULL)
-			dev->puts(s);
+			dev->puts(dev, s);
 	}
 }
 
@@ -224,25 +222,24 @@ static inline void console_doenv(int file, struct stdio_dev *dev)
 #else
 static inline int console_getc(int file)
 {
-	return stdio_devices[file]->getc();
+	return stdio_devices[file]->getc(stdio_devices[file]);
 }
 
 static inline int console_tstc(int file)
 {
-	return stdio_devices[file]->tstc();
+	return stdio_devices[file]->tstc(stdio_devices[file]);
 }
 
 static inline void console_putc(int file, const char c)
 {
-	stdio_devices[file]->putc(c);
+	stdio_devices[file]->putc(stdio_devices[file], c);
 }
 
 static inline void console_puts(int file, const char *s)
 {
-	stdio_devices[file]->puts(s);
+	stdio_devices[file]->puts(stdio_devices[file], s);
 }
 
-#ifdef CONFIG_ROCKCHIP
 static inline void console_printdevs(int file)
 {
 	printf("%s\n", stdio_devices[file]->name);
@@ -252,7 +249,6 @@ static inline void console_doenv(int file, struct stdio_dev *dev)
 {
 	console_setfile(file, dev);
 }
-#endif
 #endif /* defined(CONFIG_CONSOLE_MUX) */
 
 /** U-Boot INITIAL CONSOLE-NOT COMPATIBLE FUNCTIONS *************************/
@@ -421,7 +417,7 @@ static inline void print_pre_console_buffer(void) {}
 void putc(const char c)
 {
 #ifdef CONFIG_SANDBOX
-	if (!gd) {
+	if (!gd || !(gd->flags & GD_FLG_SERIAL_READY)) {
 		os_putc(c);
 		return;
 	}
@@ -451,7 +447,7 @@ void putc(const char c)
 void puts(const char *s)
 {
 #ifdef CONFIG_SANDBOX
-	if (!gd) {
+	if (!gd || !(gd->flags & GD_FLG_SERIAL_READY)) {
 		os_puts(s);
 		return;
 	}
@@ -508,7 +504,7 @@ int vprintf(const char *fmt, va_list args)
 	uint i;
 	char printbuffer[CONFIG_SYS_PBSIZE];
 
-#ifndef CONFIG_PRE_CONSOLE_BUFFER
+#if defined(CONFIG_PRE_CONSOLE_BUFFER) && !defined(CONFIG_SANDBOX)
 	if (!gd->have_console)
 		return 0;
 #endif
@@ -523,12 +519,12 @@ int vprintf(const char *fmt, va_list args)
 	return i;
 }
 
-#ifdef CONFIG_CTRLC
 /* test if ctrl-c was pressed */
 static int ctrlc_disabled = 0;	/* see disable_ctrl() */
 static int ctrlc_was_pressed = 0;
 int ctrlc(void)
 {
+#ifndef CONFIG_SANDBOX
 	if (!ctrlc_disabled && gd->have_console) {
 		if (tstc()) {
 			switch (getc()) {
@@ -540,9 +536,37 @@ int ctrlc(void)
 			}
 		}
 	}
+#endif
+
 	return 0;
 }
+/* Reads user's confirmation.
+   Returns 1 if user's input is "y", "Y", "yes" or "YES"
+*/
+int confirm_yesno(void)
+{
+	int i;
+	char str_input[5];
 
+	/* Flush input */
+	while (tstc())
+		getc();
+	i = 0;
+	while (i < sizeof(str_input)) {
+		str_input[i] = getc();
+		putc(str_input[i]);
+		if (str_input[i] == '\r')
+			break;
+		i++;
+	}
+	putc('\n');
+	if (strncmp(str_input, "y\r", 2) == 0 ||
+	    strncmp(str_input, "Y\r", 2) == 0 ||
+	    strncmp(str_input, "yes\r", 4) == 0 ||
+	    strncmp(str_input, "YES\r", 4) == 0)
+		return 1;
+	return 0;
+}
 /* pass 1 to disable ctrlc() checking, 0 to enable.
  * returns previous state
  */
@@ -563,7 +587,6 @@ void clear_ctrlc(void)
 {
 	ctrlc_was_pressed = 0;
 }
-#endif
 
 #ifdef CONFIG_MODEM_SUPPORT_DEBUG
 char	screen[1024];
@@ -663,6 +686,7 @@ int console_init_f(void)
 void stdio_print_current_devices(void)
 {
 	/* Print information */
+#ifndef CONFIG_ROCKCHIP
 	puts("In:    ");
 	if (stdio_devices[stdin] == NULL) {
 		puts("No input devices available!\n");
@@ -683,6 +707,7 @@ void stdio_print_current_devices(void)
 	} else {
 		printf ("%s\n", stdio_devices[stderr]->name);
 	}
+#endif
 }
 
 #ifdef CONFIG_SYS_CONSOLE_IS_IN_ENV

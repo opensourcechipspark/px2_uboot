@@ -1,0 +1,1 @@
+cmd_arch/arm/cpu/armv7/built-in.o :=  /home/xxh/popmetal/u-boot/../prebuilts/gcc/linux-x86/arm/arm-eabi-4.7/bin/arm-eabi-ld.bfd     -r -o arch/arm/cpu/armv7/built-in.o arch/arm/cpu/armv7/cache_v7.o arch/arm/cpu/armv7/cpu.o arch/arm/cpu/armv7/syslib.o 

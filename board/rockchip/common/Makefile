@@ -1,74 +1,51 @@
-#********************************************************************************
-#       COPYRIGHT (c)   2013 BY ROCK-CHIP FUZHOU
-#           --  ALL RIGHTS RESERVED  --
-#File Name:
-#Author:
-#Created:
-#Modified:
-#Revision:       1.00
-#********************************************************************************
+#
+# (C) Copyright 2008 - 2014 Rockchip Electronics
+#
+# See file CREDITS for list of people who contributed to this
+# project.
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License as
+# published by the Free Software Foundation; either version 2 of
+# the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+# MA 02111-1307 USA
+#
 
-#obj-y += armlinux/armlinux.o
-obj-y += armlinux/bootloader.o
-obj-y += armlinux/enter_recovery.o
-#obj-y += armlinux/Mainloop.o
-obj-y += armlinux/mtdpart.o
-obj-y += armlinux/parameter.o
-#obj-y += armlinux/session.o
-#obj-y += armlinux/rk28_kld.o
-#obj-y += common/A8MMU/CacheCleanFlushRegion.o
-#obj-y += common/A8MMU/CacheCleanFlushWay.o
-#obj-y += common/A8MMU/CacheCleanFlushWhole.o
-#obj-y += common/A8MMU/CacheControl.o
-#obj-y += common/A8MMU/CacheLock.o
-obj-y += common/A8MMU/hw_mm.o
-#obj-y += common/A8MMU/MMU.o
-#obj-y += common/A8MMU/MMUControl.o
-#obj-y += common/A8MMU/MMUOperateTLB.o
-#obj-y += common/A8MMU/pl310_l2cc.o
-#obj-y += common/A8MMU/RK30CacheCleanFlushWhole.o
-#obj-y += common/crc/ldcrc.o
-#obj-y += common/crc/ldcrctable.o
-obj-y += common/crc/rsa.o
-obj-y += common/crc/sha.o
-obj-y += common/emmc/hw_MMC.o
-obj-y += common/emmc/hw_SD.o
-obj-y += common/emmc/hw_SDController.o
-obj-y += common/emmc/hw_SDM.o
-obj-y += common/emmc/hw_SDOsAdapt.o
-obj-y += common/emmc/hw_SDPlatAdapt.o
-obj-y += common/emmc/sdmmcBoot.o
-#obj-y += common/fat/chkdsk.o
-#obj-y += common/fat/dir.o
-#obj-y += common/fat/Drive.o
-#obj-y += common/fat/fat.o
-#obj-y += common/fat/FDT.o
-#obj-y += common/fat/file.o
-obj-y += common/rc4/rc4.o
-obj-y += common/rc4/rc4_enc.o
-obj-y += common/rockusb/Chap_9.o
-obj-y += common/rockusb/D12ci.o
-obj-y += common/rockusb/rockusb.o
-obj-y += common/rockusb/usbCtrl.o
-obj-y += common/rockusb/usbIsr.o
-#obj-y += common/serial_p9/serial.o
-#obj-y += common/SPI/SpiBoot.o
-#obj-y += common/SPI/SpiFlash.o
-obj-y += common/boot.o
-obj-y += common/GetIdBlockInfo.o
-#obj-y += common/loaderTag.o
-obj-y += common/std_commod.o
-obj-y += common/storage.o
-#obj-y += platform/platform.o
+obj-y += platform/crc.o
+obj-y += platform/rsa.o
+obj-y += platform/sha.o
+obj-y += platform/rc4_enc.o
+obj-y += platform/ftl_std.o
+obj-y += platform/chipDepend.o
+obj-y += rkloader/parameter.o
+obj-y += rkloader/idblock.o
+obj-y += rkloader/rkloader.o
+obj-y += rkloader/rkimage.o
+obj-y += rkloader/key.o
+obj-$(CONFIG_RK_PWM_REMOTE) += rkloader/pwm_remotectl.o
+obj-y += rkboot/fastboot.o
+obj-y += emmc/hw_MMC.o
+obj-y += emmc/hw_SD.o
+obj-y += emmc/hw_SDController.o
+obj-y += emmc/hw_SDM.o
+obj-y += emmc/hw_SDOsAdapt.o
+obj-y += emmc/hw_SDPlatAdapt.o
+obj-y += mediaboot/sdmmcBoot.o
+ifdef CONFIG_SECOND_LEVEL_BOOTLOADER
+obj-y += mediaboot/nandflash_boot.o
+endif
+obj-$(CONFIG_SECUREBOOT_CRYPTO) += SecureBoot/crypto.o SecureBoot/efuse.o
+obj-y += SecureBoot/SecureBoot.o
+obj-y += SecureBoot/SecureVerify.o
+obj-y += storage/storage.o
 
 
-obj-$(CONFIG_RK_3026_CHIP) += platform/rk2928/chipDepend.o
-obj-$(CONFIG_RK_30XX_CHIP) += platform/rk30/chipDepend.o
-obj-y += platform/rk30/gpio_oper.o
-obj-y += platform/rk30/Isr.o
-##obj-y += platform/rk30/regdump.o
-##obj-y += platform/rk30/romloader.o
-##obj-y += platform/rk30/start.o
-obj-y += platform/rk30/timer.o
-##obj-y += platform/rk30/uart.o
-##obj-y += dummy.o

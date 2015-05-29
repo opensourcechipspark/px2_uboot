@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Freescale Semiconductor, Inc.
+ * Copyright 2013-2014 Freescale Semiconductor, Inc.
  *
  * See file CREDITS for list of people who contributed to this
  * project.
@@ -32,8 +32,8 @@
 #ifdef CONFIG_RAMBOOT_PBL
 #define CONFIG_RAMBOOT_TEXT_BASE	CONFIG_SYS_TEXT_BASE
 #define CONFIG_RESET_VECTOR_ADDRESS	0xfffffffc
-#define CONFIG_SYS_FSL_PBL_PBI $(SRCTREE)/board/freescale/t1040qds/t1040_pbi.cfg
-#define CONFIG_SYS_FSL_PBL_RCW $(SRCTREE)/board/freescale/t1040qds/t1040_rcw.cfg
+#define CONFIG_SYS_FSL_PBL_PBI board/freescale/t1040qds/t1040_pbi.cfg
+#define CONFIG_SYS_FSL_PBL_RCW board/freescale/t1040qds/t1040_rcw.cfg
 #endif
 
 /* High Level Configuration Options */
@@ -42,6 +42,10 @@
 #define CONFIG_E500MC			/* BOOKE e500mc family */
 #define CONFIG_SYS_BOOK3E_HV		/* Category E.HV supported */
 #define CONFIG_MP			/* support multiple processors */
+
+/* support deep sleep */
+#define CONFIG_DEEP_SLEEP
+#define CONFIG_SILENT_CONSOLE
 
 #ifndef CONFIG_SYS_TEXT_BASE
 #define CONFIG_SYS_TEXT_BASE	0xeff40000
@@ -169,8 +173,10 @@ unsigned long get_board_ddr_clk(void);
 #define CONFIG_CHIP_SELECTS_PER_CTRL	(2 * CONFIG_DIMM_SLOTS_PER_CTLR)
 
 #define CONFIG_DDR_SPD
+#ifndef CONFIG_SYS_FSL_DDR4
 #define CONFIG_SYS_FSL_DDR3
 #define CONFIG_FSL_DDR_INTERACTIVE
+#endif
 
 #define CONFIG_SYS_SPD_BUS_NUM	0
 #define SPD_EEPROM_ADDRESS	0x51
@@ -195,6 +201,12 @@ unsigned long get_board_ddr_clk(void);
 				CSPR_MSEL_NOR | \
 				CSPR_V)
 #define CONFIG_SYS_NOR_AMASK	IFC_AMASK(128*1024*1024)
+
+/*
+ * TDM Definition
+ */
+#define T1040_TDM_QUIRK_CCSR_BASE	0xfe000000
+
 /* NOR Flash Timing Params */
 #define CONFIG_SYS_NOR_CSOR	CSOR_NAND_TRHZ_80
 #define CONFIG_SYS_NOR_FTIM0	(FTIM0_NOR_TACSE(0x4) | \
@@ -374,8 +386,8 @@ unsigned long get_board_ddr_clk(void);
 					GENERATED_GBL_DATA_SIZE)
 #define CONFIG_SYS_INIT_SP_OFFSET	CONFIG_SYS_GBL_DATA_OFFSET
 
-#define CONFIG_SYS_MONITOR_LEN		(512 * 1024)
-#define CONFIG_SYS_MALLOC_LEN		(4 * 1024 * 1024)
+#define CONFIG_SYS_MONITOR_LEN		(768 * 1024)
+#define CONFIG_SYS_MALLOC_LEN		(10 * 1024 * 1024)
 
 /* Serial Port - controlled on board with jumper J8
  * open - index 2
@@ -401,6 +413,26 @@ unsigned long get_board_ddr_clk(void);
 #define CONFIG_SYS_HUSH_PARSER
 #define CONFIG_SYS_PROMPT_HUSH_PS2 "> "
 
+/* Video */
+#define CONFIG_FSL_DIU_FB
+#ifdef CONFIG_FSL_DIU_FB
+#define CONFIG_FSL_DIU_CH7301
+#define CONFIG_SYS_DIU_ADDR	(CONFIG_SYS_CCSRBAR + 0x180000)
+#define CONFIG_VIDEO
+#define CONFIG_CMD_BMP
+#define CONFIG_CFB_CONSOLE
+#define CONFIG_VIDEO_SW_CURSOR
+#define CONFIG_VGA_AS_SINGLE_DEVICE
+#define CONFIG_VIDEO_LOGO
+#define CONFIG_VIDEO_BMP_LOGO
+#define CONFIG_CFI_FLASH_USE_WEAK_ACCESSORS
+/*
+ * With CONFIG_CFI_FLASH_USE_WEAK_ACCESSORS, flash I/O is really slow, so
+ * disable empty flash sector detection, which is I/O-intensive.
+ */
+#undef CONFIG_SYS_FLASH_EMPTY_INFO
+#endif
+
 /* pass open firmware flat tree */
 #define CONFIG_OF_LIBFDT
 #define CONFIG_OF_BOARD_SETUP
@@ -414,11 +446,17 @@ unsigned long get_board_ddr_clk(void);
 #define CONFIG_SYS_I2C
 #define CONFIG_SYS_I2C_FSL		/* Use FSL common I2C driver */
 #define CONFIG_SYS_FSL_I2C_SPEED	50000	/* I2C speed in Hz */
+#define CONFIG_SYS_FSL_I2C2_SPEED	50000
+#define CONFIG_SYS_FSL_I2C3_SPEED	50000
+#define CONFIG_SYS_FSL_I2C4_SPEED	50000
 #define CONFIG_SYS_FSL_I2C_SLAVE	0x7F
-#define CONFIG_SYS_FSL_I2C2_SPEED	50000	/* I2C speed in Hz */
 #define CONFIG_SYS_FSL_I2C2_SLAVE	0x7F
+#define CONFIG_SYS_FSL_I2C3_SLAVE	0x7F
+#define CONFIG_SYS_FSL_I2C4_SLAVE	0x7F
 #define CONFIG_SYS_FSL_I2C_OFFSET	0x118000
-#define CONFIG_SYS_FSL_I2C2_OFFSET	0x119000
+#define CONFIG_SYS_FSL_I2C2_OFFSET	0x118100
+#define CONFIG_SYS_FSL_I2C3_OFFSET	0x119000
+#define CONFIG_SYS_FSL_I2C4_OFFSET	0x119100
 
 #define I2C_MUX_PCA_ADDR		0x77
 #define I2C_MUX_PCA_ADDR_PRI		0x77 /* Primary Mux*/
@@ -426,6 +464,11 @@ unsigned long get_board_ddr_clk(void);
 
 /* I2C bus multiplexer */
 #define I2C_MUX_CH_DEFAULT      0x8
+#define I2C_MUX_CH_DIU		0xC
+
+/* LDI/DVI Encoder for display */
+#define CONFIG_SYS_I2C_LDI_ADDR         0x38
+#define CONFIG_SYS_I2C_DVI_ADDR         0x75
 
 /*
  * RTC configuration
@@ -571,6 +614,8 @@ unsigned long get_board_ddr_clk(void);
 #define CONFIG_SYS_DPAA_FMAN
 #define CONFIG_SYS_DPAA_PME
 
+#define CONFIG_QE
+#define CONFIG_U_QE
 /* Default address of microcode for the Linux Fman driver */
 #if defined(CONFIG_SPIFLASH)
 /*
@@ -578,7 +623,7 @@ unsigned long get_board_ddr_clk(void);
  * env, so we got 0x110000.
  */
 #define CONFIG_SYS_QE_FW_IN_SPIFLASH
-#define CONFIG_SYS_QE_FMAN_FW_ADDR	0x110000
+#define CONFIG_SYS_FMAN_FW_ADDR	0x110000
 #elif defined(CONFIG_SDCARD)
 /*
  * PBL SD boot image should stored at 0x1000(8 blocks), the size of the image is
@@ -586,13 +631,14 @@ unsigned long get_board_ddr_clk(void);
  * 0x2000 (16 blocks), 8 + 1650 + 16 = 1674, enlarge it to 1680.
  */
 #define CONFIG_SYS_QE_FMAN_FW_IN_MMC
-#define CONFIG_SYS_QE_FMAN_FW_ADDR	(512 * 1680)
+#define CONFIG_SYS_FMAN_FW_ADDR	(512 * 1680)
 #elif defined(CONFIG_NAND)
 #define CONFIG_SYS_QE_FMAN_FW_IN_NAND
-#define CONFIG_SYS_QE_FMAN_FW_ADDR	(8 * CONFIG_SYS_NAND_BLOCK_SIZE)
+#define CONFIG_SYS_FMAN_FW_ADDR	(8 * CONFIG_SYS_NAND_BLOCK_SIZE)
 #else
 #define CONFIG_SYS_QE_FMAN_FW_IN_NOR
-#define CONFIG_SYS_QE_FMAN_FW_ADDR		0xEFF00000
+#define CONFIG_SYS_FMAN_FW_ADDR		0xEFF00000
+#define CONFIG_SYS_QE_FW_ADDR		0xEFF10000
 #endif
 #define CONFIG_SYS_QE_FMAN_FW_LENGTH	0x10000
 #define CONFIG_SYS_FDT_PAD		(0x3000 + CONFIG_SYS_QE_FMAN_FW_LENGTH)
@@ -622,6 +668,23 @@ unsigned long get_board_ddr_clk(void);
 #define CONFIG_MII		/* MII PHY management */
 #define CONFIG_ETHPRIME		"FM1@DTSEC1"
 #define CONFIG_PHY_GIGE		/* Include GbE speed/duplex detection */
+#endif
+
+/*
+ * Dynamic MTD Partition support with mtdparts
+ */
+#ifndef CONFIG_SYS_NO_FLASH
+#define CONFIG_MTD_DEVICE
+#define CONFIG_MTD_PARTITIONS
+#define CONFIG_CMD_MTDPARTS
+#define CONFIG_FLASH_CFI_MTD
+#define MTDIDS_DEFAULT "nor0=fe8000000.nor,nand0=fff800000.flash," \
+			"spi0=spife110000.0"
+#define MTDPARTS_DEFAULT	"mtdparts=fe8000000.nor:1m(uboot),5m(kernel)," \
+				"128k(dtb),96m(fs),-(user);"\
+				"fff800000.flash:2m(uboot),9m(kernel),"\
+				"128k(dtb),96m(fs),-(user);spife110000.0:" \
+				"2m(uboot),9m(kernel),128k(dtb),-(user)"
 #endif
 
 /*
@@ -669,7 +732,6 @@ unsigned long get_board_ddr_clk(void);
 #define CONFIG_SYS_PBSIZE (CONFIG_SYS_CBSIZE+sizeof(CONFIG_SYS_PROMPT)+16)
 #define CONFIG_SYS_MAXARGS	16		/* max number of command args */
 #define CONFIG_SYS_BARGSIZE	CONFIG_SYS_CBSIZE/* Boot Argument Buffer Size */
-#define CONFIG_SYS_HZ		1000		/* decrementer freq: 1ms ticks*/
 
 /*
  * For booting Linux, the board info and command line data
@@ -704,6 +766,7 @@ unsigned long get_board_ddr_clk(void);
 	"bank_intlv=cs0_cs1;"					\
 	"usb1:dr_mode=host,phy_type=" __stringify(__USB_PHY_TYPE) "\0"\
 	"netdev=eth0\0"						\
+	"video-mode=fslfb:1024x768-32@60,monitor=dvi\0"		\
 	"uboot=" __stringify(CONFIG_UBOOTPATH) "\0"		\
 	"ubootaddr=" __stringify(CONFIG_SYS_TEXT_BASE) "\0"	\
 	"tftpflash=tftpboot $loadaddr $uboot && "		\
@@ -717,8 +780,7 @@ unsigned long get_board_ddr_clk(void);
 	"ramdiskfile=t1040qds/ramdisk.uboot\0"			\
 	"fdtaddr=c00000\0"					\
 	"fdtfile=t1040qds/t1040qds.dtb\0"			\
-	"bdev=sda3\0"						\
-	"c=ffe\0"
+	"bdev=sda3\0"
 
 #define CONFIG_LINUX                       \
 	"setenv bootargs root=/dev/ram rw "            \

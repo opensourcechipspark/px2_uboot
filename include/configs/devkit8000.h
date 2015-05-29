@@ -17,7 +17,6 @@
 
 /* High Level Configuration Options */
 #define CONFIG_OMAP		1	/* in a TI OMAP core */
-#define CONFIG_OMAP34XX		1	/* which is a 34XX */
 #define CONFIG_OMAP3_DEVKIT8000	1	/* working with DevKit8000 */
 #define CONFIG_MACH_TYPE	MACH_TYPE_DEVKIT8000
 #define CONFIG_OMAP_GPIO
@@ -116,8 +115,6 @@
 #define CONFIG_SYS_NAND_BASE		NAND_BASE	/* physical address */
 							/* to access nand at */
 							/* CS0 */
-#define GPMC_NAND_ECC_LP_x16_LAYOUT	1
-
 #define CONFIG_SYS_MAX_NAND_DEVICE	1		/* Max number of NAND */
 							/* devices */
 #define CONFIG_JFFS2_NAND
@@ -264,8 +261,6 @@
 #define PHYS_SDRAM_2			OMAP34XX_SDRC_CS1
 
 /* NAND and environment organization  */
-#define PISMO1_NAND_SIZE		GPMC_SIZE_128M
-
 #define CONFIG_SYS_MONITOR_LEN		(256 << 10)	/* Reserve 2 sectors */
 
 #define CONFIG_ENV_IS_IN_NAND		1
@@ -285,7 +280,6 @@
 #define CONFIG_SYS_SRAM_SIZE               0x10000
 
 /* Defines for SPL */
-#define CONFIG_SPL
 #define CONFIG_SPL_FRAMEWORK
 #define CONFIG_SPL_NAND_SIMPLE
 
@@ -316,6 +310,7 @@
 #define CONFIG_SPL_BSS_MAX_SIZE		0x80000
 
 /* NAND boot config */
+#define CONFIG_SYS_NAND_BUSWIDTH_16BIT	16
 #define CONFIG_SYS_NAND_5_ADDR_CYCLE
 #define CONFIG_SYS_NAND_PAGE_COUNT	64
 #define CONFIG_SYS_NAND_PAGE_SIZE	2048

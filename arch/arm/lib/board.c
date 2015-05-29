@@ -21,7 +21,6 @@
  * IRQ Stack: 00ebff7c
  * FIQ Stack: 00ebef7c
  */
-#define DEBUG
 
 #include <common.h>
 #include <command.h>
@@ -34,12 +33,13 @@
 #include <nand.h>
 #include <onenand_uboot.h>
 #include <mmc.h>
+#include <scsi.h>
 #include <libfdt.h>
 #include <fdtdec.h>
 #include <post.h>
 #include <logbuff.h>
 #include <asm/sections.h>
-#include <asm/sizes.h>
+#include <linux/sizes.h>
 
 #ifdef CONFIG_BITBANGMII
 #include <miiphy.h>
@@ -59,31 +59,20 @@ extern void dataflash_print_info(void);
 #include <i2c.h>
 #endif
 
-extern void DMADeInit(void);
 /************************************************************************
  * Coloured LED functionality
  ************************************************************************
  * May be supplied by boards if desired
  */
-inline void __coloured_LED_init(void) {}
-void coloured_LED_init(void)
-	__attribute__((weak, alias("__coloured_LED_init")));
-inline void __red_led_on(void) {}
-void red_led_on(void) __attribute__((weak, alias("__red_led_on")));
-inline void __red_led_off(void) {}
-void red_led_off(void) __attribute__((weak, alias("__red_led_off")));
-inline void __green_led_on(void) {}
-void green_led_on(void) __attribute__((weak, alias("__green_led_on")));
-inline void __green_led_off(void) {}
-void green_led_off(void) __attribute__((weak, alias("__green_led_off")));
-inline void __yellow_led_on(void) {}
-void yellow_led_on(void) __attribute__((weak, alias("__yellow_led_on")));
-inline void __yellow_led_off(void) {}
-void yellow_led_off(void) __attribute__((weak, alias("__yellow_led_off")));
-inline void __blue_led_on(void) {}
-void blue_led_on(void) __attribute__((weak, alias("__blue_led_on")));
-inline void __blue_led_off(void) {}
-void blue_led_off(void) __attribute__((weak, alias("__blue_led_off")));
+__weak void coloured_LED_init(void) {}
+__weak void red_led_on(void) {}
+__weak void red_led_off(void) {}
+__weak void green_led_on(void) {}
+__weak void green_led_off(void) {}
+__weak void yellow_led_on(void) {}
+__weak void yellow_led_off(void) {}
+__weak void blue_led_on(void) {}
+__weak void blue_led_off(void) {}
 
 /*
  ************************************************************************
@@ -108,8 +97,8 @@ static int display_banner(void)
 {
 	printf("\n\n%s\n\n", version_string);
 	debug("U-Boot code: %08lX -> %08lX  BSS: -> %08lX\n",
-	       _TEXT_BASE,
-	       _bss_start_ofs + _TEXT_BASE, _bss_end_ofs + _TEXT_BASE);
+	       (ulong)&_start,
+	       (ulong)&__bss_start, (ulong)&__bss_end);
 #ifdef CONFIG_MODEM_SUPPORT
 	debug("Modem Support enabled\n");
 #endif
@@ -200,29 +189,21 @@ static int arm_pci_init(void)
  */
 typedef int (init_fnc_t) (void);
 
-int print_cpuinfo(void);
-
-void __dram_init_banksize(void)
+__weak void dram_init_banksize(void)
 {
 	gd->bd->bi_dram[0].start = CONFIG_SYS_SDRAM_BASE;
 	gd->bd->bi_dram[0].size =  gd->ram_size;
 }
-void dram_init_banksize(void)
-	__attribute__((weak, alias("__dram_init_banksize")));
 
-int __arch_cpu_init(void)
+__weak int arch_cpu_init(void)
 {
 	return 0;
 }
-int arch_cpu_init(void)
-	__attribute__((weak, alias("__arch_cpu_init")));
 
-int __power_init_board(void)
+__weak int power_init_board(void)
 {
 	return 0;
 }
-int power_init_board(void)
-	__attribute__((weak, alias("__power_init_board")));
 
 	/* Record the board_init_f() bootstage (after arch_cpu_init()) */
 static int mark_bootstage(void)
@@ -253,9 +234,7 @@ init_fnc_t *init_sequence[] = {
 	serial_init,		/* serial communications setup */
 	console_init_f,		/* stage 1 init of console */
 	display_banner,		/* say that we are here */
-#if defined(CONFIG_DISPLAY_CPUINFO)
 	print_cpuinfo,		/* display cpu info (and speed) */
-#endif
 #if defined(CONFIG_DISPLAY_BOARDINFO)
 	checkboard,		/* display board info */
 #endif
@@ -280,13 +259,13 @@ void board_init_f(ulong bootflag)
 
 	memset((void *)gd, 0, sizeof(gd_t));
 
-	gd->mon_len = _bss_end_ofs;
+	gd->mon_len = (ulong)&__bss_end - (ulong)_start;
 #ifdef CONFIG_OF_EMBED
 	/* Get a pointer to the FDT */
-	gd->fdt_blob = _binary_dt_dtb_start;
+	gd->fdt_blob = __dtb_dt_begin;
 #elif defined CONFIG_OF_SEPARATE
 	/* FDT is at end of image */
-	gd->fdt_blob = (void *)(_end_ofs + _TEXT_BASE);
+	gd->fdt_blob = &_end;
 #endif
 	/* Allow the early environment to override the fdt address */
 	gd->fdt_blob = (void *)getenv_ulong("fdtcontroladdr", 16,
@@ -298,7 +277,7 @@ void board_init_f(ulong bootflag)
 		}
 	}
 
-#ifdef CONFIG_OF_CONTROL
+#if defined(CONFIG_OF_CONTROL)
 	/* For now, put this check after the console is ready */
 	if (fdtdec_prepare_fdt()) {
 		panic("** CONFIG_OF_CONTROL defined but no FDT - please see "
@@ -325,7 +304,7 @@ void board_init_f(ulong bootflag)
 	gd->ram_size -= CONFIG_SYS_MEM_TOP_HIDE;
 #endif
 
-	addr = CONFIG_SYS_SDRAM_BASE + gd->ram_size;
+	addr = CONFIG_SYS_SDRAM_BASE + get_effective_memsize();
 
 #ifdef CONFIG_LOGBUFFER
 #ifndef CONFIG_ALT_LB_ADDR
@@ -373,33 +352,45 @@ void board_init_f(ulong bootflag)
 #endif /* CONFIG_LCD */
 
 #ifdef CONFIG_ROCKCHIP
-#ifndef CONFIG_RK_EXTRA_BUFFER_SIZE
-#define CONFIG_RK_EXTRA_BUFFER_SIZE (SZ_4M)
-#endif
-    /* reserve rk global buffers */
-    addr -= CONFIG_RK_EXTRA_BUFFER_SIZE;
+	/* round down to next 4 kB limit */
+	addr &= ~(4096 - 1);
+	/* reserve rk global buffers */
+	addr -= CONFIG_RK_GLOBAL_BUFFER_SIZE;
+	gd->arch.rk_global_buf_addr = addr;
+	debug("Reserving %dk for rk global buffer at %08lx\n",
+			CONFIG_RK_GLOBAL_BUFFER_SIZE >> 10, addr);
 
-    gd->arch.rk_extra_buf_addr = addr;
-	debug("Reserving %ldk for rk global buffers at %08lx\n", CONFIG_RK_EXTRA_BUFFER_SIZE >> 10, addr);
+	/* reserve rk boot buffers */
+	addr &= ~(4096 - 1);
+	addr -= CONFIG_RK_BOOT_BUFFER_SIZE;
+	gd->arch.rk_boot_buf_addr = addr;
+
+	debug("Reserving %dk for rk boot buffer at %08lx\n",
+			CONFIG_RK_BOOT_BUFFER_SIZE >> 10, gd->arch.rk_boot_buf_addr);
 #endif
 
 #ifdef CONFIG_CMD_FASTBOOT
-#ifndef CONFIG_FASTBOOT_TRANSFER_BUFFER_SIZE
-#define CONFIG_FASTBOOT_TRANSFER_BUFFER_SIZE (SZ_32M)
+	/* reserve fastboot transfer buffer */
+#ifdef CONFIG_ROCKCHIP
+	/* using rk boot buffer for fbt buffer */
+	gd->arch.fastboot_buf_addr = gd->arch.rk_boot_buf_addr;
+	debug("Using rk boot buffer as Fastboot transfer buffer.\n");
+#else
+	addr &= ~(4096 - 1);
+	addr -= CONFIG_FASTBOOT_TRANSFER_BUFFER_SIZE;
+	gd->arch.fastboot_buf_addr = addr;
+	debug("Reserving %dk for fastboot transfer buffer at %08lx\n",
+			CONFIG_FASTBOOT_TRANSFER_BUFFER_SIZE >> 10, addr);
 #endif
-    /* reserve fastboot transfer buffer(also use in fastboot charge animation. */
-    addr -= CONFIG_FASTBOOT_TRANSFER_BUFFER_SIZE;
-
-    gd->arch.fastboot_buf_addr = addr;
-	debug("Reserving %ldk for fastboot transfer buffer at %08lx\n", CONFIG_FASTBOOT_TRANSFER_BUFFER_SIZE >> 10, addr);
 
 #ifndef CONFIG_FASTBOOT_LOG_SIZE
 #define CONFIG_FASTBOOT_LOG_SIZE (SZ_2M)
 #endif
-    /* reserve fastboot log buffer */
-    addr -= CONFIG_FASTBOOT_LOG_SIZE;
-    gd->arch.fastboot_log_buf_addr = addr;
-    debug("Reserving %ldk for fastboot log buffer at %08lx\n", CONFIG_FASTBOOT_LOG_SIZE >> 10, addr);
+	/* reserve fastboot log buffer */
+	addr -= CONFIG_FASTBOOT_LOG_SIZE;
+	gd->arch.fastboot_log_buf_addr = addr;
+	debug("Reserving %dk for fastboot log buffer at %08lx\n",
+			CONFIG_FASTBOOT_LOG_SIZE >> 10, addr);
 #endif //CONFIG_CMD_FASTBOOT
 
 	/*
@@ -476,21 +467,21 @@ void board_init_f(ulong bootflag)
 #endif
 
 	debug("New Stack Pointer is: %08lx\n", addr_sp);
-    printf("total reserving memory(except stack) is :%dm\n", ((CONFIG_SYS_SDRAM_BASE + gd->ram_size - addr_sp) >> 20) + 1);
+    debug("total reserving memory(except stack) is :%ldm\n",
+			((CONFIG_SYS_SDRAM_BASE + gd->ram_size - addr_sp) >> 20) + 1);
 
 #ifdef CONFIG_POST
 	post_bootmode_init();
 	post_run(NULL, POST_ROM | post_bootmode_get(0));
 #endif
 
-	gd->bd->bi_baudrate = gd->baudrate;
 	/* Ram ist board specific, so move it to board code ... */
 	dram_init_banksize();
 	display_dram_config();	/* and display it */
 
 	gd->relocaddr = addr;
 	gd->start_addr_sp = addr_sp;
-	gd->reloc_off = addr - _TEXT_BASE;
+	gd->reloc_off = addr - (ulong)&_start;
 	debug("relocation Offset is: %08lx\n", gd->reloc_off);
 	if (new_fdt) {
 		memcpy(new_fdt, gd->fdt_blob, fdt_size);
@@ -555,7 +546,7 @@ void board_init_r(gd_t *id, ulong dest_addr)
 	gd->flags |= GD_FLG_RELOC;	/* tell others: relocation done */
 	bootstage_mark_name(BOOTSTAGE_ID_START_UBOOT_R, "board_init_r");
 
-	monitor_flash_len = _end_ofs;
+	monitor_flash_len = (ulong)&__rel_dyn_end - (ulong)_start;
 
 	/* Enable caches */
 	enable_caches();
@@ -573,7 +564,11 @@ void board_init_r(gd_t *id, ulong dest_addr)
 #endif
 	serial_initialize();
 
+#ifndef CONFIG_SKIP_RELOCATE_UBOOT
 	debug("Now running in RAM - U-Boot at: %08lx\n", dest_addr);
+#else
+	debug("Now running in RAM - U-Boot at: %08lx\n", CONFIG_SYS_SDRAM_BASE);
+#endif
 
 #ifdef CONFIG_LOGBUFFER
 	logbuff_init_ptrs();
@@ -622,6 +617,7 @@ void board_init_r(gd_t *id, ulong dest_addr)
 	puts("NAND:  ");
 	nand_init();		/* go init the NAND */
 #endif
+
 #if defined(CONFIG_CMD_ONENAND)
 	onenand_init();
 #endif
@@ -631,17 +627,20 @@ void board_init_r(gd_t *id, ulong dest_addr)
 	mmc_initialize(gd->bd);
 #endif
 
+#ifdef CONFIG_ROCKCHIP
+	board_storage_init();
+#endif
+
+#ifdef CONFIG_CMD_SCSI
+	puts("SCSI:  ");
+	scsi_init();
+#endif
+
 #ifdef CONFIG_HAS_DATAFLASH
 	AT91F_DataflashInit();
 	dataflash_print_info();
 #endif
-	/* set up exceptions */
-	interrupt_init();
-	/* enable exceptions */
-	enable_interrupts();
-#ifdef CONFIG_PL330_DMA
-	DMAInit();
-#endif
+
 	/* initialize environment */
 	if (should_load_env())
 		env_relocate();
@@ -681,11 +680,15 @@ void board_init_r(gd_t *id, ulong dest_addr)
 	misc_init_r();
 #endif
 
-	
 #ifndef CONFIG_ROCKCHIP
+	 /* set up exceptions */
+	interrupt_init();
+	/* enable exceptions */
+	enable_interrupts();
+#endif
+
 	/* Initialize from environment */
 	load_addr = getenv_ulong("loadaddr", 16, load_addr);
-#endif
 
 #ifdef CONFIG_BOARD_LATE_INIT
 	board_late_init();

@@ -10,14 +10,30 @@ ifndef CONFIG_SPL_BUILD
 obj-y += main.o
 obj-y += command.o
 obj-y += exports.o
-ifndef CONFIG_ROCKCHIP
 obj-y += hash.o
+ifdef CONFIG_SYS_HUSH_PARSER
+obj-y += cli_hush.o
 endif
-obj-$(CONFIG_SYS_HUSH_PARSER) += hush.o
+
+# We always have this since drivers/ddr/fs/interactive.c needs it
+obj-y += cli_simple.o
+
+obj-y += cli.o
+obj-y += cli_readline.o
 ifndef CONFIG_ROCKCHIP
 obj-y += s_record.o
 obj-y += xyzModem.o
 obj-y += cmd_disk.o
+endif
+
+# This option is not just y/n - it can have a numeric value
+ifdef CONFIG_BOOTDELAY
+obj-y += autoboot.o
+endif
+
+# This option is not just y/n - it can have a numeric value
+ifdef CONFIG_BOOT_RETRY_TIME
+obj-y += bootretry.o
 endif
 
 # boards
@@ -26,10 +42,8 @@ obj-$(CONFIG_SYS_GENERIC_BOARD) += board_r.o
 
 # core command
 obj-y += cmd_boot.o
-obj-$(CONFIG_CMD_BOOTM) += cmd_bootm.o
-ifndef CONFIG_ROCKCHIP
+obj-$(CONFIG_CMD_BOOTM) += cmd_bootm.o bootm.o bootm_os.o
 obj-y += cmd_help.o
-endif
 obj-y += cmd_version.o
 
 # environment
@@ -55,6 +69,7 @@ obj-$(CONFIG_ENV_IS_IN_UBI) += env_ubi.o
 obj-$(CONFIG_ENV_IS_NOWHERE) += env_nowhere.o
 
 # command
+obj-$(CONFIG_CMD_AES) += cmd_aes.o
 obj-$(CONFIG_CMD_AMBAPP) += cmd_ambapp.o
 obj-$(CONFIG_SOURCE) += cmd_source.o
 obj-$(CONFIG_CMD_SOURCE) += cmd_source.o
@@ -71,6 +86,7 @@ obj-$(CONFIG_CMD_CONSOLE) += cmd_console.o
 obj-$(CONFIG_CMD_CPLBINFO) += cmd_cplbinfo.o
 obj-$(CONFIG_DATAFLASH_MMC_SELECT) += cmd_dataflash_mmc_mux.o
 obj-$(CONFIG_CMD_DATE) += cmd_date.o
+obj-$(CONFIG_CMD_DEMO) += cmd_demo.o
 obj-$(CONFIG_CMD_SOUND) += cmd_sound.o
 ifdef CONFIG_4xx
 obj-$(CONFIG_CMD_SETGETDCR) += cmd_dcr.o
@@ -88,9 +104,8 @@ obj-$(CONFIG_SYS_HUSH_PARSER) += cmd_exit.o
 obj-$(CONFIG_CMD_EXT4) += cmd_ext4.o
 obj-$(CONFIG_CMD_EXT2) += cmd_ext2.o
 obj-$(CONFIG_CMD_FAT) += cmd_fat.o
-obj-$(CONFIG_CMD_FDC)$(CONFIG_CMD_FDOS) += cmd_fdc.o
+obj-$(CONFIG_CMD_FDC) += cmd_fdc.o
 obj-$(CONFIG_OF_LIBFDT) += cmd_fdt.o fdt_support.o
-obj-$(CONFIG_CMD_FDOS) += cmd_fdos.o
 obj-$(CONFIG_CMD_FITUPD) += cmd_fitupd.o
 obj-$(CONFIG_CMD_FLASH) += cmd_flash.o
 ifdef CONFIG_FPGA
@@ -102,6 +117,7 @@ obj-$(CONFIG_CMD_FUSE) += cmd_fuse.o
 obj-$(CONFIG_CMD_GETTIME) += cmd_gettime.o
 obj-$(CONFIG_CMD_GPIO) += cmd_gpio.o
 obj-$(CONFIG_CMD_I2C) += cmd_i2c.o
+obj-$(CONFIG_CMD_IOTRACE) += cmd_iotrace.o
 obj-$(CONFIG_CMD_HASH) += cmd_hash.o
 obj-$(CONFIG_CMD_IDE) += cmd_ide.o
 obj-$(CONFIG_CMD_IMMAP) += cmd_immap.o
@@ -142,7 +158,6 @@ obj-$(CONFIG_CMD_PART) += cmd_part.o
 ifdef CONFIG_PCI
 obj-$(CONFIG_CMD_PCI) += cmd_pci.o
 endif
-
 ifndef CONFIG_ROCKCHIP
 obj-y += cmd_pcmcia.o
 endif
@@ -164,18 +179,27 @@ obj-$(CONFIG_CMD_STRINGS) += cmd_strings.o
 obj-$(CONFIG_CMD_TERMINAL) += cmd_terminal.o
 obj-$(CONFIG_CMD_TIME) += cmd_time.o
 obj-$(CONFIG_CMD_TRACE) += cmd_trace.o
+ifndef CONFIG_ROCKCHIP
 obj-$(CONFIG_SYS_HUSH_PARSER) += cmd_test.o
+endif
 obj-$(CONFIG_CMD_TPM) += cmd_tpm.o
 obj-$(CONFIG_CMD_TSI148) += cmd_tsi148.o
 obj-$(CONFIG_CMD_UBI) += cmd_ubi.o
 obj-$(CONFIG_CMD_UBIFS) += cmd_ubifs.o
 obj-$(CONFIG_CMD_UNIVERSE) += cmd_universe.o
 obj-$(CONFIG_CMD_UNZIP) += cmd_unzip.o
+ifdef CONFIG_LZMA
+obj-$(CONFIG_CMD_LZMADEC) += cmd_lzmadec.o
+endif
 ifdef CONFIG_CMD_USB
+ifndef CONFIG_ROCKCHIP
 obj-y += cmd_usb.o
+endif
 obj-y += usb.o usb_hub.o
 obj-$(CONFIG_USB_STORAGE) += usb_storage.o
 endif
+obj-$(CONFIG_CMD_FASTBOOT) += cmd_fastboot.o
+
 obj-$(CONFIG_CMD_USB_MASS_STORAGE) += cmd_usb_mass_storage.o
 obj-$(CONFIG_CMD_THOR_DOWNLOAD) += cmd_thordown.o
 obj-$(CONFIG_CMD_XIMG) += cmd_ximg.o
@@ -185,17 +209,20 @@ obj-$(CONFIG_CMD_ZIP) += cmd_zip.o
 obj-$(CONFIG_CMD_ZFS) += cmd_zfs.o
 
 obj-$(CONFIG_CMD_FASTBOOT) += cmd_fastboot.o
+obj-$(CONFIG_CMD_BOOTRK) += cmd_bootrk.o
+obj-$(CONFIG_CMD_ROCKUSB) += cmd_rockusb.o
 
+obj-$(CONFIG_RESOURCE_PARTITION) += resource.o
 ifdef CONFIG_CMD_FASTBOOT
+ifdef CONFIG_RESOURCE_PARTITION
 obj-$(CONFIG_CMD_CHARGE_ANIM) += cmd_charge.o
+endif
 endif
 
 # others
 obj-$(CONFIG_BOOTSTAGE) += bootstage.o
 obj-$(CONFIG_CONSOLE_MUX) += iomux.o
-ifndef CONFIG_ROCKCHIP
 obj-y += flash.o
-endif
 obj-$(CONFIG_CMD_KGDB) += kgdb.o kgdb_stubs.o
 obj-$(CONFIG_I2C_EDID) += edid.o
 obj-$(CONFIG_KALLSYMS) += kallsyms.o
@@ -214,22 +241,23 @@ ifdef CONFIG_SPL_BUILD
 obj-$(CONFIG_ENV_IS_IN_FLASH) += env_flash.o
 obj-$(CONFIG_SPL_YMODEM_SUPPORT) += xyzModem.o
 obj-$(CONFIG_SPL_NET_SUPPORT) += miiphyutil.o
-# environment
-obj-$(CONFIG_SPL_ENV_SUPPORT) += env_attr.o
-obj-$(CONFIG_SPL_ENV_SUPPORT) += env_flags.o
-obj-$(CONFIG_SPL_ENV_SUPPORT) += env_callback.o
 ifdef CONFIG_SPL_USB_HOST_SUPPORT
 obj-$(CONFIG_SPL_USB_SUPPORT) += usb.o usb_hub.o
 obj-$(CONFIG_USB_STORAGE) += usb_storage.o
 endif
-ifneq ($(CONFIG_SPL_NET_SUPPORT),y)
+ifdef CONFIG_SPL_SATA_SUPPORT
+obj-$(CONFIG_CMD_SCSI) += cmd_scsi.o
+endif
+# environment
+ifdef CONFIG_SPL_ENV_SUPPORT
+obj-$(CONFIG_SPL_ENV_SUPPORT) += env_attr.o
+obj-$(CONFIG_SPL_ENV_SUPPORT) += env_flags.o
+obj-$(CONFIG_SPL_ENV_SUPPORT) += env_callback.o
 obj-$(CONFIG_ENV_IS_NOWHERE) += env_nowhere.o
 obj-$(CONFIG_ENV_IS_IN_MMC) += env_mmc.o
 obj-$(CONFIG_ENV_IS_IN_NAND) += env_nand.o
 obj-$(CONFIG_ENV_IS_IN_SPI_FLASH) += env_sf.o
 obj-$(CONFIG_ENV_IS_IN_FLASH) += env_flash.o
-else
-obj-y += env_nowhere.o
 endif
 endif
 # core command
@@ -237,31 +265,26 @@ obj-y += cmd_nvedit.o
 #environment
 obj-y += env_common.o
 #others
-ifdef CONFIG_DDR_SPD
-SPD := y
-endif
-ifdef CONFIG_SPD_EEPROM
-SPD := y
-endif
-obj-$(SPD) += ddr_spd.o
+obj-$(CONFIG_DDR_SPD) += ddr_spd.o
+obj-$(CONFIG_SPD_EEPROM) += ddr_spd.o
 obj-$(CONFIG_HWCONFIG) += hwconfig.o
 obj-$(CONFIG_BOUNCE_BUFFER) += bouncebuf.o
 obj-y += console.o
+obj-$(CONFIG_CROS_EC) += cros_ec.o
 obj-y += dlmalloc.o
-ifndef CONFIG_ROCKCHIP
 obj-y += image.o
-endif
+obj-$(CONFIG_ANDROID_BOOT_IMAGE) += image-android.o
 obj-$(CONFIG_OF_LIBFDT) += image-fdt.o
 obj-$(CONFIG_FIT) += image-fit.o
 obj-$(CONFIG_FIT_SIGNATURE) += image-sig.o
+obj-$(CONFIG_IO_TRACE) += iotrace.o
 obj-y += memsize.o
 obj-y += stdio.o
 
-$(obj)env_embedded.o: $(src)env_embedded.c
-	$(CC) $(AFLAGS) -Wa,--no-warn \
-		-DENV_CRC=$(shell $(obj)../tools/envcrc) \
-		-c -o $@ $(src)env_embedded.c
+# This option is not just y/n - it can have a numeric value
+ifdef CONFIG_FASTBOOT_FLASH_MMC_DEV
+obj-y += aboot.o
+obj-y += fb_mmc.o
+endif
 
-# SEE README.arm-unaligned-accesses
-$(obj)hush.o: CFLAGS += $(PLATFORM_NO_UNALIGNED)
-$(obj)fdt_support.o: CFLAGS += $(PLATFORM_NO_UNALIGNED)
+CFLAGS_env_embedded.o := -Wa,--no-warn -DENV_CRC=$(shell tools/envcrc 2>/dev/null)

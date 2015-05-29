@@ -8,7 +8,7 @@
 #ifndef __CONFIG_H
 #define __CONFIG_H
 
-#include <asm/sizes.h>
+#include <linux/sizes.h>
 
 /* LP0 suspend / resume */
 #define CONFIG_TEGRA_LP0
@@ -18,11 +18,6 @@
 #define CONFIG_TEGRA_CLOCK_SCALING
 
 #include "tegra20-common.h"
-
-/* Enable fdt support for Seaboard. Flash the image in u-boot-dtb.bin */
-#define CONFIG_DEFAULT_DEVICE_TREE	tegra20-seaboard
-#define CONFIG_OF_CONTROL
-#define CONFIG_OF_SEPARATE
 
 /* High-level configuration options */
 #define V_PROMPT		"Tegra20 (SeaBoard) # "

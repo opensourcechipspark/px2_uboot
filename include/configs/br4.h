@@ -136,7 +136,6 @@
 #define CONFIG_BOOTDELAY	2
 #define CONFIG_LOADADDR		0x2000000
 
-
 /*
  * Pull in common ADI header for remaining command/environment setup
  */

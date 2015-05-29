@@ -17,13 +17,41 @@
 
 #include <common.h>
 #include <fdt_support.h>
+#include <asm/armv7.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
-int arch_fixup_memory_node(void *blob)
+int arch_fixup_fdt(void *blob)
 {
 	bd_t *bd = gd->bd;
-	int bank;
+	int bank, ret;
+
+#if defined(CONFIG_ROCKCHIP) && defined(CONFIG_RK_MAX_DRAM_BANKS)
+	u64 _start[CONFIG_RK_MAX_DRAM_BANKS];
+	u64 _size[CONFIG_RK_MAX_DRAM_BANKS];
+	for (bank = 0; bank < CONFIG_RK_MAX_DRAM_BANKS; bank++) {
+		if (!bd->rk_dram[bank].size)
+			break;
+		_start[bank] = bd->rk_dram[bank].start;
+		_size[bank] = bd->rk_dram[bank].size;
+#ifdef CONFIG_MAX_MEM_ADDR
+		if (_start[bank] < CONFIG_MAX_MEM_ADDR) {
+			if ((_start[bank] + _size[bank]) >= CONFIG_MAX_MEM_ADDR) {
+				//resize bank.
+				_size[bank] = CONFIG_MAX_MEM_ADDR - _start[bank];
+			}
+		} else {
+			_start[bank] = CONFIG_MAX_MEM_ADDR;
+			_size[bank] = 0;
+		}
+#endif
+		printf("Add bank:%016llx, %016llx\n", _start[bank], _size[bank]);
+	}
+	if (bank) {
+		return fdt_fixup_memory_banks(blob, _start, _size, bank);
+	}
+#endif /* CONFIG_ROCKCHIP */
+
 	u64 start[CONFIG_NR_DRAM_BANKS];
 	u64 size[CONFIG_NR_DRAM_BANKS];
 
@@ -32,5 +60,12 @@ int arch_fixup_memory_node(void *blob)
 		size[bank] = bd->bi_dram[bank].size;
 	}
 
-	return fdt_fixup_memory_banks(blob, start, size, CONFIG_NR_DRAM_BANKS);
+	ret = fdt_fixup_memory_banks(blob, start, size, CONFIG_NR_DRAM_BANKS);
+#if defined(CONFIG_ARMV7_NONSEC) || defined(CONFIG_ARMV7_VIRT)
+	if (ret)
+		return ret;
+
+	ret = armv7_update_dt(blob);
+#endif
+	return ret;
 }

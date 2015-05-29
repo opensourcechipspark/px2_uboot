@@ -144,8 +144,7 @@ int board_phy_config(struct phy_device *phydev)
 
 int board_eth_init(bd_t *bis)
 {
-	struct iomuxc_base_regs *const iomuxc_regs =
-			(struct iomuxc_base_regs *)IOMUXC_BASE_ADDR;
+	struct iomuxc *const iomuxc_regs = (struct iomuxc *)IOMUXC_BASE_ADDR;
 
 	int ret = enable_fec_anatop_clock(ENET_25MHz);
 	if (ret)
@@ -156,11 +155,7 @@ int board_eth_init(bd_t *bis)
 
 	setup_iomux_enet();
 
-	ret = cpu_eth_init(bis);
-	if (ret)
-		printf("FEC MXC: %s:failed\n", __func__);
-
-	return ret;
+	return cpu_eth_init(bis);
 }
 #endif
 

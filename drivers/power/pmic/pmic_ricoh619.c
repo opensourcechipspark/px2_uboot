@@ -1,119 +1,166 @@
 /*
- *  Copyright (C) 2012 Samsung Electronics
- *  Lukasz Majewski <l.majewski@samsung.com>
- *
- * See file CREDITS for list of people who contributed to this
- * project.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
+ *  Copyright (C) 2012 rockchips
+ * yxj <yxj@rock-chips.com>
+ * 
  */
 
+/*#define DEBUG*/
 #include <common.h>
-#include <power/pmic.h>
-#include <i2c.h>
+#include <fdtdec.h>
+#include <power/battery.h>
+#include <power/ricoh619_pmic.h>
+#include <power/rockchip_power.h>
 #include <errno.h>
 
+DECLARE_GLOBAL_DATA_PTR;
 
-int check_charge(void)
+#define SYSTEM_ON_VOL_THRESD			3650
+struct pmic_ricoh619 ricoh619;
+
+static struct battery batt_status;
+
+static struct fdt_regulator_match ricoh619_regulator_matches[] = {
+	{ .prop	= "ricoh619_dc1",},
+	{ .prop = "ricoh619_dc2",},
+	{ .prop = "ricoh619_dc3",},
+	{ .prop = "ricoh619_dc4",},
+	{ .prop = "ricoh619_dc5",},
+	{ .prop = "ricoh619_ldo1",},
+	{ .prop = "ricoh619_ldo2",},
+	{ .prop = "ricoh619_ldo3",},
+	{ .prop = "ricoh619_ldo4",},
+	{ .prop = "ricoh619_ldo5",},
+	{ .prop = "ricoh619_ldo6",},
+	{ .prop = "ricoh619_ldo7",},
+	{ .prop = "ricoh619_ldo8",},
+	{ .prop = "ricoh619_ldo9",},
+	{ .prop = "ricoh619_ldo10",},
+	{ .prop = "ricoh619_ldortc1",},
+	{ .prop = "ricoh619_ldortc2",},
+};
+
+
+int ricoh619_check_charge(void)
 {
-    int reg=0;
-    int ret = 0;
-    if(0==IReadLoaderFlag() && 0==IReadLoaderMode()) {
-        i2c_set_bus_num(1);
-        i2c_init (CONFIG_SYS_I2C_SPEED, CONFIG_SYS_I2C_SLAVE);
-        i2c_set_bus_speed(CONFIG_SYS_I2C_SPEED);
-        reg = i2c_reg_read(CONFIG_SYS_I2C_SLAVE,0x09);//
-        printf("%s power on history %x \n",__func__,reg);
-        if((reg & 0x04) || ((reg & 0x02)&& is_charging()))
-        {
-            printf("In charging! \n");
-            ret = 1;
-        }
-    }
+	int ret = 0;
+	get_power_bat_status(&batt_status);
+	ret = batt_status.state_of_chrg ? 1: 0;
+	if (batt_status.voltage_uV < SYSTEM_ON_VOL_THRESD) {
+		ret = 1;
+		printf("low power.....\n");
+	}
     
-    return ret;
+	return ret;
 }
 
 static int pmic_charger_state(struct pmic *p, int state, int current)
 {
-    return 0;
-}
-
-
-/*
-0. disable charging  
-1. usb charging
-2. ac adapter charging
-*/
-int pmic_charger_setting(int current)
-{
-    i2c_set_bus_num(1);
-    i2c_init (CONFIG_SYS_I2C_SPEED, CONFIG_SYS_I2C_SLAVE);
-    i2c_set_bus_speed(CONFIG_SYS_I2C_SPEED);
-
-    i2c_reg_write(CONFIG_SYS_I2C_SLAVE,0x0d, i2c_reg_read(CONFIG_SYS_I2C_SLAVE,0x0d)|0x20);
-    
-    i2c_reg_write(CONFIG_SYS_I2C_SLAVE,0xbb, 0x23);  /* VFCHG	4.15v,	= 0x0-0x4 (4.05v 4.10v 4.15v 4.20v 4.35v)   */                                             
-                                                     /* VRCHG   4.00,	= 0x0-0x4 (3.85v 3.90v 3.95v 4.00v 4.10v) */
-    printf("%s %d\n",__func__,current);
-    switch (current){
-    case 0:
-        i2c_reg_write(CONFIG_SYS_I2C_SLAVE,0xb3, i2c_reg_read(CONFIG_SYS_I2C_SLAVE,0xb3)&~0x03);      //disable charging    
-        break;
-    case 1:
-        i2c_reg_write(CONFIG_SYS_I2C_SLAVE,0xb8,0x4f);	 /* ICHG	1600ma,	= 0x0-0x1D (100mA - 3000mA) */
-                                                         /* ICCHG   100ma   = 0x0-3 (50mA 100mA 150mA 200mA)*/
-        i2c_reg_write(CONFIG_SYS_I2C_SLAVE,0xb3, i2c_reg_read(CONFIG_SYS_I2C_SLAVE,0xb3)|0x03);      //enable charging    
-        i2c_reg_write(CONFIG_SYS_I2C_SLAVE,0xb6,0x7);  /* ILIM_ADP 0x11= 0x0-0x1D (100mA - 3000mA) */
-        i2c_reg_write(CONFIG_SYS_I2C_SLAVE,0xb7,(i2c_reg_read(CONFIG_SYS_I2C_SLAVE,0xb7)&0xe0)|0x07);/* ILIM_USB 0x07,= 0x0-0x1D (100mA - 3000mA) */
-        break;
-    case 2:
-        i2c_reg_write(CONFIG_SYS_I2C_SLAVE,0xb8,0x4f);	 /* ICHG	1600ma,	= 0x0-0x1D (100mA - 3000mA) */
-                                                         /* ICCHG   100ma   = 0x0-3 (50mA 100mA 150mA 200mA)*/
-        i2c_reg_write(CONFIG_SYS_I2C_SLAVE,0xb3, i2c_reg_read(CONFIG_SYS_I2C_SLAVE,0xb3)|0x03);      //enable charging 
-        i2c_reg_write(CONFIG_SYS_I2C_SLAVE,0xb6,0x10);	/* ILIM_ADP	0x11= 0x0-0x1D (100mA - 3000mA) */
-        i2c_reg_write(CONFIG_SYS_I2C_SLAVE,0xb7,(i2c_reg_read(CONFIG_SYS_I2C_SLAVE,0xb7)&0xe0)|0x10);/* ILIM_USB 0x07,= 0x0-0x1D (100mA - 3000mA) */
-        break;
-    default:
-        break;
-    }
-    return 0;
-}
-
-int pmic_init(unsigned char bus)
-{
-    //enable lcdc power ldo
-    i2c_set_bus_num(1);
-    i2c_init (CONFIG_SYS_I2C_SPEED, CONFIG_SYS_I2C_SLAVE);
-    i2c_set_bus_speed(CONFIG_SYS_I2C_SPEED);
-    i2c_reg_write(CONFIG_SYS_I2C_SLAVE,0x10,0x4c);// DIS_OFF_PWRON_TIM bit 0; OFF_PRESS_PWRON 6s; OFF_JUDGE_PWRON bit 1; ON_PRESS_PWRON bit 2s
-    i2c_reg_write(CONFIG_SYS_I2C_SLAVE,0x39,0xc8);// dcdc4 output 3.1v for vccio
-    i2c_reg_write(CONFIG_SYS_I2C_SLAVE,0x50,0x30);// ldo5 output 1.8v for VCC18_LCD
-    i2c_reg_write(CONFIG_SYS_I2C_SLAVE,0x44,i2c_reg_read(CONFIG_SYS_I2C_SLAVE,0x44)|(1<<4));//ldo5 enable
-
 	return 0;
 }
 
-void shut_down(void)
+
+int ricoh619_poll_pwr_key_sta(void)
 {
-    i2c_set_bus_num(1);
-    i2c_init (CONFIG_SYS_I2C_SPEED, CONFIG_SYS_I2C_SLAVE);
-    i2c_set_bus_speed(CONFIG_SYS_I2C_SPEED);
-    i2c_reg_write(CONFIG_SYS_I2C_SLAVE, 0xe0, i2c_reg_read(CONFIG_SYS_I2C_SLAVE,0xe0) & 0xfe);
-    i2c_reg_write(CONFIG_SYS_I2C_SLAVE, 0x0f, i2c_reg_read(CONFIG_SYS_I2C_SLAVE,0x0f) & 0xfe);   
-    i2c_reg_write(CONFIG_SYS_I2C_SLAVE, 0x0e, i2c_reg_read(CONFIG_SYS_I2C_SLAVE,0x0e) | 0x01);  
+	i2c_set_bus_num(ricoh619.pmic->bus);
+	i2c_init(CONFIG_SYS_I2C_SPEED, ricoh619.pmic->hw.i2c.addr);
+	i2c_set_bus_speed(CONFIG_SYS_I2C_SPEED);
+	return i2c_reg_read(ricoh619.pmic->hw.i2c.addr, 0x14) & 0x01;	
+}
+
+static int ricoh619_i2c_probe(u32 bus, u32 addr)
+{
+	uchar val;
+	int ret;
+	i2c_set_bus_num(bus);
+	i2c_init (RICOH619_I2C_SPEED, 0);
+	ret = i2c_probe(addr);
+	if (ret < 0)
+		return -ENODEV;
+	val = i2c_reg_read(addr, 0x36);
+	if ((val == 0xff) || (val == 0))
+		return -ENODEV;
+	else
+		return 0;
+	
+}
+int ricoh619_parse_dt(const void* blob)
+{
+	int node, parent, nd;
+	u32 i2c_bus_addr, bus;
+	int ret;
+	fdt_addr_t addr;
+	node = fdt_node_offset_by_compatible(blob, 0,
+					COMPAT_RICOH_RICOH619);
+	if (node < 0) {
+		printf("can't find dts node for ricoh619\n");
+		return -ENODEV;
+	}
+
+	if (!fdt_device_is_available(blob,node)) {
+		debug("device ricoh619 is disabled\n");
+		return -1;
+	}
+	
+	addr = fdtdec_get_addr(blob, node, "reg");
+	parent = fdt_parent_offset(blob, node);
+	if (parent < 0) {
+		debug("%s: Cannot find node parent\n", __func__);
+		return -1;
+	}
+	i2c_bus_addr = fdtdec_get_addr(blob, parent, "reg");
+	bus = i2c_get_bus_num_fdt(i2c_bus_addr);
+	ret = ricoh619_i2c_probe(bus, addr);
+	if (ret < 0) {
+		debug("pmic ricoh619 i2c probe failed\n");
+		return ret;
+	}
+	nd = fdt_get_regulator_node(blob, node);
+	if (nd < 0)
+		printf("%s: Cannot find regulators\n", __func__);
+	else
+		fdt_regulator_match(blob, nd, ricoh619_regulator_matches,
+					RICOH619_NUM_REGULATORS);
+	ricoh619.pmic = pmic_alloc();
+	ricoh619.node = node;
+	ricoh619.pmic->hw.i2c.addr = addr;
+	ricoh619.pmic->bus = bus;
+	debug("ricoh619 i2c_bus:%d addr:0x%02x\n", ricoh619.pmic->bus,
+		ricoh619.pmic->hw.i2c.addr);
+	return 0;
+	 
+}
+
+int pmic_ricoh619_init(unsigned char bus)
+{
+	int ret;
+	if (!ricoh619.pmic) {
+		ret = ricoh619_parse_dt(gd->fdt_blob);
+		if (ret < 0)
+			return ret;
+	}
+	//enable lcdc power ldo
+	ricoh619.pmic->interface = PMIC_I2C;
+	i2c_set_bus_num(ricoh619.pmic->bus);
+	i2c_init (RICOH619_I2C_SPEED, 0);
+	i2c_reg_write(ricoh619.pmic->hw.i2c.addr, 0xff, 0x00); /*for i2c protect*/
+	i2c_reg_write(ricoh619.pmic->hw.i2c.addr ,0x10,0x4c);// DIS_OFF_PWRON_TIM bit 0; OFF_PRESS_PWRON 6s; OFF_JUDGE_PWRON bit 1; ON_PRESS_PWRON bit 2s
+	i2c_reg_write(ricoh619.pmic->hw.i2c.addr,0x36,0xc8);// dcdc1 output 3.1v for vccio
+	i2c_reg_write(ricoh619.pmic->hw.i2c.addr,0x30,0x03);
+	i2c_reg_write(ricoh619.pmic->hw.i2c.addr,0x4c,0x54);// vout1 output 3.0v for vccio_pmu
+	i2c_reg_write(ricoh619.pmic->hw.i2c.addr,0x51,0x30);// ldo6 output 1.8v for VCC18_LCD
+	i2c_reg_write(ricoh619.pmic->hw.i2c.addr,0x52,0x04);//
+	i2c_reg_write(ricoh619.pmic->hw.i2c.addr,0x44,i2c_reg_read(ricoh619.pmic->hw.i2c.addr,0x44)|(3<<5));//ldo6 enable
+	fg_ricoh619_init(ricoh619.pmic->bus, ricoh619.pmic->hw.i2c.addr);
+	return 0;
+}
+
+void pmic_ricoh619_shut_down(void)
+{
+	i2c_set_bus_num(ricoh619.pmic->bus);
+	i2c_init (CONFIG_SYS_I2C_SPEED, ricoh619.pmic->hw.i2c.addr);
+	i2c_set_bus_speed(CONFIG_SYS_I2C_SPEED);
+	i2c_reg_write(ricoh619.pmic->hw.i2c.addr, 0xe0, i2c_reg_read(ricoh619.pmic->hw.i2c.addr,0xe0) & 0xfe);
+	i2c_reg_write(ricoh619.pmic->hw.i2c.addr, 0x0f, i2c_reg_read(ricoh619.pmic->hw.i2c.addr,0x0f) & 0xfe);
+	i2c_reg_write(ricoh619.pmic->hw.i2c.addr, 0x0e, i2c_reg_read(ricoh619.pmic->hw.i2c.addr,0x0e) | 0x01);
 }
 

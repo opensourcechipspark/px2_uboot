@@ -13,7 +13,6 @@
  * High Level Configuration Options
  */
 #define CONFIG_OMAP			/* in a TI OMAP core */
-#define CONFIG_OMAP34XX			/* which is a 34XX */
 #define CONFIG_OMAP3_MCX		/* working with mcx */
 #define CONFIG_OMAP_GPIO
 #define CONFIG_OMAP_COMMON
@@ -98,6 +97,7 @@
 
 /* EHCI */
 #define CONFIG_USB_STORAGE
+#define CONFIG_OMAP3_GPIO_2
 #define CONFIG_OMAP3_GPIO_5
 #define CONFIG_USB_EHCI
 #define CONFIG_USB_EHCI_OMAP
@@ -263,10 +263,9 @@
 			"${mtdparts} "					\
 			"vram=6M omapfb.vram=1:2M,2:2M,3:2M "		\
 			"omapdss.def_disp=lcd;"				\
-		"bootm 0x82000000 0x84000000\0"
-
-#define CONFIG_BOOTCOMMAND \
-	"run nandboot"
+		"bootm 0x82000000 0x84000000\0"				\
+	"bootcmd=mmc rescan;if fatload mmc 0 82000000 loadbootscr.scr;"	\
+		"then source 82000000;else run nandboot;fi\0"
 
 #define CONFIG_AUTO_COMPLETE
 #define CONFIG_CMDLINE_EDITING
@@ -316,12 +315,7 @@
  */
 
 /* **** PISMO SUPPORT *** */
-
-/* Configure the PISMO */
-#define PISMO1_NAND_SIZE		GPMC_SIZE_128M
-
 #define CONFIG_NAND_OMAP_GPMC
-#define GPMC_NAND_ECC_LP_x16_LAYOUT
 #define CONFIG_ENV_IS_IN_NAND
 #define SMNAND_ENV_OFFSET		0x180000 /* environment starts here */
 
@@ -349,7 +343,6 @@
 					 GENERATED_GBL_DATA_SIZE)
 
 /* Defines for SPL */
-#define CONFIG_SPL
 #define CONFIG_SPL_FRAMEWORK
 #define CONFIG_SPL_BOARD_INIT
 #define CONFIG_SPL_NAND_SIMPLE
@@ -395,6 +388,7 @@
 #define CONFIG_SYS_NAND_ECCSIZE		256
 #define CONFIG_SYS_NAND_ECCBYTES	3
 #define CONFIG_NAND_OMAP_ECCSCHEME	OMAP_ECC_HAM1_CODE_SW
+#define CONFIG_SPL_NAND_SOFTECC
 
 #define CONFIG_SYS_NAND_U_BOOT_START   CONFIG_SYS_TEXT_BASE
 

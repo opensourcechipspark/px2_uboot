@@ -944,7 +944,7 @@ static void parse_putc(const char c)
 		CURSOR_SET;
 }
 
-void video_putc(const char c)
+void video_putc(struct stdio_dev *dev, const char c)
 {
 #ifdef CONFIG_CFB_CONSOLE_ANSI
 	int i;
@@ -1158,12 +1158,12 @@ void video_putc(const char c)
 		flush_cache(VIDEO_FB_ADRS, VIDEO_SIZE);
 }
 
-void video_puts(const char *s)
+void video_puts(struct stdio_dev *dev, const char *s)
 {
 	int count = strlen(s);
 
 	while (count--)
-		video_putc(*s++);
+		video_putc(dev, *s++);
 }
 
 /*
@@ -1473,7 +1473,11 @@ int video_display_bitmap(ulong bmp_image, int x, int y)
 			printf("Error: malloc in gunzip failed!\n");
 			return 1;
 		}
-		if (gunzip(dst, CONFIG_SYS_VIDEO_LOGO_MAX_SIZE,
+		/*
+		 * NB: we need to force offset of +2
+		 * See doc/README.displaying-bmps
+		 */
+		if (gunzip(dst+2, CONFIG_SYS_VIDEO_LOGO_MAX_SIZE-2,
 			   (uchar *) bmp_image,
 			   &len) != 0) {
 			printf("Error: no valid bmp or bmp.gz image at %lx\n",
@@ -1489,7 +1493,7 @@ int video_display_bitmap(ulong bmp_image, int x, int y)
 		/*
 		 * Set addr to decompressed image
 		 */
-		bmp = (bmp_image_t *) dst;
+		bmp = (bmp_image_t *)(dst+2);
 
 		if (!((bmp->header.signature[0] == 'B') &&
 		      (bmp->header.signature[1] == 'M'))) {
@@ -2275,8 +2279,6 @@ int drv_video_init(void)
 	console_dev.flags = DEV_FLAGS_OUTPUT | DEV_FLAGS_SYSTEM;
 	console_dev.putc = video_putc;	/* 'putc' function */
 	console_dev.puts = video_puts;	/* 'puts' function */
-	console_dev.tstc = NULL;	/* 'tstc' function */
-	console_dev.getc = NULL;	/* 'getc' function */
 
 #if !defined(CONFIG_VGA_AS_SINGLE_DEVICE)
 	/* Also init console device */

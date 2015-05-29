@@ -255,6 +255,25 @@ static int ep0_get_descriptor (struct usb_device_instance *device,
 			copy_config (urb, string_descriptor, string_descriptor->bLength, max);
 		}
 		break;
+#if defined(CONFIG_ROCKCHIP)
+	/* Fixed win8 usb3.0 rockusb device failed enumeration. */
+	case USB_DESCRIPTOR_TYPE_BOS:
+		{
+			struct usb_bos_descriptor *bos_descriptor =
+				device->bos_descriptor;
+
+			if (!bos_descriptor)
+				return -1;
+
+			/* copy descriptor for this device */
+			copy_config(urb, bos_descriptor,
+					sizeof(struct usb_bos_descriptor),
+					max);
+		}
+		dbg_ep0(3, "copied bos descriptor, actual_length: 0x%x",
+				urb->actual_length);
+		break;
+#endif
 	case USB_DESCRIPTOR_TYPE_INTERFACE:
 	serial_printf("USB_DESCRIPTOR_TYPE_INTERFACE - error not implemented\n");
 		return -1;
@@ -315,7 +334,7 @@ static int ep0_get_descriptor (struct usb_device_instance *device,
 			/*copy_config(urb, &report_descriptor->bData[0], report_descriptor->wLength, max); */
 			if (max - urb->actual_length > 0) {
 				int length =
-					MIN (report_descriptor->wLength,
+					min(report_descriptor->wLength,
 					     max - urb->actual_length);
 				memcpy (urb->buffer + urb->actual_length,
 					&report_descriptor->bData[0], length);
@@ -532,7 +551,7 @@ int ep0_recv_setup (struct urb *urb)
 					/*return usbd_device_feature (device, le16_to_cpu (request->wIndex), */
 					/*                    request->bRequest == USB_REQ_SET_FEATURE); */
 					/* NEED TO IMPLEMENT THIS!!! */
-					return -1;
+					return 0;
 				} else {
 					dbg_ep0 (1, "request %s bad wValue: %04x",
 						 USBD_DEVICE_REQUESTS
